@@ -1,0 +1,23 @@
+### Key Features:
+- Document ingestion system that processes various file formats (PDF, DOCX, TXT, MD, CSV, HTML)
+- Vector database for efficient information retrieval using ChromaDB
+- Integration with open-source LLMs like Llama or Mistral
+- Web interface with real-time chat via WebSockets
+- API endpoints for integration with your company website
+- RAG (Retrieval Augmented Generation) architecture for knowledge-grounded responses
+
+### How to Use:
+1. Place your company documents in the `data/knowledge` directory
+2. Run the initialization script with `python init.py --company "Your Company Name" --ingest`
+3. The system will process your documents, generate embeddings, and store them in the vector database
+4. Start the server with `python init.py`
+5. Embed the chatbot on your website using the provided JavaScript code
+
+### Customization Options:
+- Change the LLM by editing the configuration (supports various open-source models)
+- Modify the system prompt to alter the bot's tone and behavior
+- Adjust retrieval parameters for better results with your specific data
+
+The code is designed to be modular and extensible, so you can easily add more features as needed.
+
+Would you like me to explain any specific part of the implementation in more detail?

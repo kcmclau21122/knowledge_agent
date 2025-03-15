@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ request.app.title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .chat-container {
+            height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <header class="bg-blue-600 text-white p-4">
+        <h1 class="text-2xl font-bold">Knowledge Agent</h1>
+    </header>
+    
+    <main class="container mx-auto p-4">
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <div id="chat-container" class="chat-container mb-4 p-2">
+                <div id="chat-messages"></div>
+            </div>
+            
+            <div class="flex">
+                <input type="text" id="user-input" class="flex-grow border rounded-l p-2" placeholder="Ask a question...">
+                <button id="send-btn" class="bg-blue-600 text-white px-4 py-2 rounded-r">Send</button>
+            </div>
+        </div>
+    </main>
+    
+    <script>
+        // WebSocket connection
+        const socket = new WebSocket(`ws://${window.location.host}/ws`);
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-btn');
+        
+        // Chat history
+        let chatHistory = [];
+        
+        // Send message function
+        function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+            
+            // Add user message to chat
+            addMessage('user', message);
+            
+            // Send to websocket
+            socket.send(JSON.stringify({message}));
+            
+            // Clear input
+            userInput.value = '';
+        }
+        
+        // Add message to chat
+        function addMessage(role, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `mb-2 p-2 rounded ${role === 'user' ? 'bg-blue-100 ml-12' : 'bg-gray-100 mr-12'}`;
+            messageDiv.innerHTML = `<p>${content}</p>`;
+            chatMessages.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Add to history
+            chatHistory.push({role, content});
+        }
+        
+        // Event listeners
+        socket.onopen = () => {
+            console.log('WebSocket connected');
+            addMessage('assistant', 'Hello! How can I help you today?');
+        };
+        
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            addMessage('assistant', data.message);
+        };
+        
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+        
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>

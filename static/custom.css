@@ -1,0 +1,20 @@
+/* Custom styles for Knowledge Agent */
+.chat-bubble {
+    position: relative;
+    padding: 10px 15px;
+    border-radius: 15px;
+    margin-bottom: 10px;
+    max-width: 80%;
+}
+
+.user-bubble {
+    background-color: #e3f2fd;
+    margin-left: auto;
+    border-bottom-right-radius: 0;
+}
+
+.assistant-bubble {
+    background-color: #f5f5f5;
+    margin-right: auto;
+    border-bottom-left-radius: 0;
+}
