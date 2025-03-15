@@ -53,7 +53,7 @@ data/vectordb/*
 data/knowledge/*
 !data/knowledge/.gitkeep
 
-# Logs
+# Logs - very explicit patterns
 /logs/
 /logs/*
 logs/
