@@ -54,10 +54,14 @@ data/knowledge/*
 !data/knowledge/.gitkeep
 
 # Logs
+/logs/
+/logs/*
 logs/
+logs/*
 *.log
 log/
 *.logs
+knowledge_agent.log*
 
 # Virtual environment
 .env
