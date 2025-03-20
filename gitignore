@@ -45,6 +45,11 @@ share/python-wheels/
 # Model files and vector database (potentially large)
 data/models/*
 data/vectordb/*
+
+# Ignore all model files
+models/**/*.gguf
+*.gguf
+
 # Preserve directory structure but ignore content
 !data/models/.gitkeep
 !data/vectordb/.gitkeep

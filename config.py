@@ -25,7 +25,7 @@ class Config:
     LLM_MODEL = "TheBloke/Mistral-7B-Instruct-v0.1-GGUF"
     MODEL_PATH = "./models/mistral-7b-instruct-v0.1.Q4_K_M.gguf"
     EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-    HUGGINGFACE_TOKEN = "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"
+    HUGGINGFACE_TOKEN = os.environ.get("HUGGINGFACE_TOKEN", "")
     
     # LLM generation settings
     CONTEXT_WINDOW_SIZE = 4096
