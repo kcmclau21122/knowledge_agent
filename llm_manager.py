@@ -5,152 +5,103 @@ LLM Manager module for handling language model operations
 import logging
 import torch
 import os
+import time
+import traceback 
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from sentence_transformers import SentenceTransformer
+from utils import log_gpu_memory
+from llama_cpp import Llama  # This is the new import for GGUF models
 
 from config import Config
 
 logger = logging.getLogger(__name__)
 
 class LLMManager:
-    def __init__(self, model_name=None, embedding_model=None):
+    def __init__(self, model_name=None, embedding_model=None, model_path=None):
         """Initialize the LLM Manager with configuration parameters"""
         self.model_name = model_name or Config.LLM_MODEL
+        self.model_path = model_path or Config.MODEL_PATH
         self.embedding_model_name = embedding_model or Config.EMBEDDING_MODEL
         
-        self.tokenizer = None
         self.model = None
-        self.generator = None
         self.embedding_model = None
     
     def load_models(self):
         """Load the LLM and embedding models"""
-        logger.info(f"Loading LLM model from {self.model_name}")
+        logger.info(f"Loading GGUF model from {self.model_path}")
+        log_gpu_memory()  # Log before model loading
+
+        if not os.path.exists(self.model_path):
+            logger.error(f"Model file not found at {self.model_path}")
+            logger.info("Please run download_gguf_from_config.py to download the model")
+            raise FileNotFoundError(f"Model file not found: {self.model_path}")
+
         try:
-            # Check if we're using a local model
-            if os.path.exists(self.model_name):
-                logger.info(f"Loading local model from {self.model_name}")
+            # For GGUF models, we use llama-cpp-python
+            n_gpu_layers = -1  # Use all GPU layers if CUDA is available
+            n_ctx = Config.CONTEXT_WINDOW_SIZE  # Context window size
             
-            # Load the tokenizer
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            
-            # Try loading with optimizations first
-            try:
-                logger.info("Attempting to load model with 4-bit quantization...")
-                
-                # Import bitsandbytes to check if it's available
-                import bitsandbytes
-                
-                # Load with 4-bit quantization
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    self.model_name,
-                    device_map="auto",
-                    torch_dtype=torch.float16,
-                    load_in_4bit=True,
-                    low_cpu_mem_usage=True
-                )
-                logger.info("Successfully loaded model with 4-bit quantization")
-                
-            except (ImportError, ModuleNotFoundError):
-                # Fallback to half precision without 4-bit quantization
-                logger.info("bitsandbytes not available, falling back to half precision without 4-bit quantization")
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    self.model_name,
-                    device_map="auto" if torch.cuda.is_available() else "cpu",
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                    low_cpu_mem_usage=True
-                )
-                logger.info("Successfully loaded model with half precision")
-            
-            # Create a text generation pipeline
-            self.generator = pipeline(
-                "text-generation",
-                model=self.model,
-                tokenizer=self.tokenizer,
-                device_map="auto" if torch.cuda.is_available() else "cpu"
+            # Initialize the GGUF model
+            self.model = Llama(
+                model_path=self.model_path,
+                n_gpu_layers=n_gpu_layers,
+                n_ctx=n_ctx,
+                verbose=False
             )
             
-            # Load the embedding model
+            logger.info("GGUF model loaded successfully")
+            
+            # Load the embedding model (unchanged)
             try:
                 logger.info(f"Loading embedding model from {self.embedding_model_name}")
                 self.embedding_model = SentenceTransformer(self.embedding_model_name)
-                logger.info("Embedding model loaded successfully")
             except Exception as e:
                 logger.warning(f"Failed to load embedding model: {e}")
                 logger.info("Knowledge agent will run without embedding functionality")
             
-            logger.info("Models loaded successfully")
-            
         except Exception as e:
-            logger.error(f"Error loading models: {str(e)}")
-            logger.info("Attempting to load a fallback model...")
-            
-            try:
-                fallback_model = "facebook/opt-125m"  # Tiny model as fallback
-                self.tokenizer = AutoTokenizer.from_pretrained(fallback_model)
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    fallback_model,
-                    device_map="auto" if torch.cuda.is_available() else "cpu",
-                    torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-                    low_cpu_mem_usage=True
-                )
-                
-                self.generator = pipeline(
-                    "text-generation",
-                    model=self.model,
-                    tokenizer=self.tokenizer,
-                    device_map="auto" if torch.cuda.is_available() else "cpu"
-                )
-                
-                logger.info(f"Loaded fallback model: {fallback_model}")
-            except Exception as e2:
-                logger.error(f"Failed to load fallback model: {e2}")
-                raise RuntimeError("Could not load any language model. Please check your internet connection or specify a smaller model.")
+            logger.error(f"Error loading GGUF model: {str(e)}")
+            logger.error(traceback.format_exc())
+            # Fallback handling code...
     
-    def generate_response(self, prompt: str, max_new_tokens: int = 512, 
-                         temperature: float = 0.7, top_p: float = 0.9) -> str:
-        """
-        Generate a response from the LLM
-        
-        Args:
-            prompt: The input prompt
-            max_new_tokens: Maximum number of tokens to generate
-            temperature: Controls randomness (higher = more random)
-            top_p: Controls diversity (higher = more diverse)
-            
-        Returns:
-            Generated text response
-        """
-        if not self.generator:
+    def generate_response(self, prompt: str, max_new_tokens: int = None, 
+                        temperature: float = None, top_p: float = None) -> str:
+        # Use values from Config if not provided
+        max_new_tokens = max_new_tokens or Config.MAX_NEW_TOKENS
+        temperature = temperature or Config.GENERATION_TEMPERATURE
+        top_p = top_p or Config.GENERATION_TOP_P
+
+        """Generate a response using the GGUF model"""
+        log_gpu_memory()  # Log before generation
+
+        if not self.model:
             raise ValueError("Models not loaded. Call load_models() first.")
         
         try:
-            # Generate with the pipeline
-            outputs = self.generator(
+            # Generate with llama-cpp
+            output = self.model.create_completion(
                 prompt,
-                max_new_tokens=max_new_tokens,
+                max_tokens=max_new_tokens,
                 temperature=temperature,
                 top_p=top_p,
-                do_sample=True,
-                num_return_sequences=1,
-                eos_token_id=self.tokenizer.eos_token_id,
-                pad_token_id=self.tokenizer.eos_token_id
+                stop=["</s>", "<|im_end|>"],  # Common stop tokens for Mistral
+                echo=False
             )
             
             # Extract the generated text
-            generated_text = outputs[0]["generated_text"]
+            response = output["choices"][0]["text"].strip()
             
-            # Remove the prompt from the generated text
-            if generated_text.startswith(prompt):
-                response = generated_text[len(prompt):].strip()
-            else:
-                response = generated_text.strip()
-                
+            # Log an excerpt of the response for debugging
+            response_preview = response[:50] + "..." if len(response) > 50 else response
+            logger.debug(f"Generated response preview: {response_preview}")
+            
             return response
             
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             return "I apologize, but I'm having trouble generating a response at the moment. Please try again."
+
+
     
     def get_embeddings(self, texts):
         """

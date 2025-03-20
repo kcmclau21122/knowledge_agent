@@ -1,0 +1,58 @@
+2025-03-20 16:42:12,870 - logging_test - INFO - main.py:125 - TEST: Logging system initialized
+2025-03-20 16:42:12,871 - __main__ - INFO - main.py:137 - Detailed logging successfully configured
+2025-03-20 16:42:12,871 - __main__ - INFO - main.py:138 - Log file location: C:\Users\mclau\source\repos\knowledge_agent\logs\knowledge_agent_debug_20250320_164212.log
+2025-03-20 16:42:12,871 - __main__ - INFO - main.py:193 - ==================================================
+2025-03-20 16:42:12,871 - __main__ - INFO - main.py:194 - KNOWLEDGE AGENT STARTING
+2025-03-20 16:42:12,880 - __main__ - INFO - main.py:195 - ==================================================
+2025-03-20 16:42:12,880 - __main__ - INFO - main.py:198 - Current Working Directory: C:\Users\mclau\source\repos\knowledge_agent
+2025-03-20 16:42:12,880 - __main__ - INFO - main.py:199 - Python Version: 3.10.16 | packaged by conda-forge | (main, Dec  5 2024, 14:07:43) [MSC v.1942 64 bit (AMD64)]
+2025-03-20 16:42:12,881 - __main__ - INFO - main.py:200 - Python Executable: C:\Users\mclau\anaconda3\envs\knowledge_ai\python.exe
+2025-03-20 16:42:12,881 - __main__ - INFO - main.py:213 - Using custom knowledge directory: C:/TestData/preborn
+2025-03-20 16:42:12,881 - __main__ - INFO - main.py:217 - Knowledge Directory Path: C:\TestData\preborn
+2025-03-20 16:42:12,881 - __main__ - INFO - main.py:218 - Knowledge Directory Exists: True
+2025-03-20 16:42:12,882 - __main__ - INFO - main.py:224 - Total files/directories in knowledge directory: 2
+2025-03-20 16:42:12,882 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\Ingested
+2025-03-20 16:42:12,882 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\manifest.json
+2025-03-20 16:42:12,882 - utils - INFO - utils.py:19 - Directories created
+2025-03-20 16:42:12,884 - templates - INFO - templates.py:252 - Templates and static files created
+2025-03-20 16:42:12,884 - __main__ - INFO - main.py:239 - Initializing Knowledge Agent for PreBorn
+2025-03-20 16:42:12,885 - utils - INFO - utils.py:19 - Directories created
+2025-03-20 16:42:12,885 - knowledge_agent - INFO - knowledge_agent.py:46 - Initializing vector database
+2025-03-20 16:42:12,885 - vector_database - INFO - vector_database.py:36 - Initializing embedding function with model: sentence-transformers/all-MiniLM-L6-v2
+2025-03-20 16:42:13,249 - vector_database - INFO - vector_database.py:40 - Embedding function initialized successfully
+2025-03-20 16:42:13,249 - vector_database - INFO - vector_database.py:48 - Initializing ChromaDB at path: C:\Users\mclau\source\repos\knowledge_agent\data\vectordb
+2025-03-20 16:42:13,341 - vector_database - INFO - vector_database.py:50 - ChromaDB client initialized successfully
+2025-03-20 16:42:13,341 - vector_database - INFO - vector_database.py:74 - Attempting to get existing collection: knowledge_base
+2025-03-20 16:42:13,342 - vector_database - INFO - vector_database.py:59 - Using collection: knowledge_base
+2025-03-20 16:42:13,342 - vector_database - INFO - vector_database.py:68 - Knowledge graph initialized (not built yet)
+2025-03-20 16:42:13,342 - knowledge_agent - INFO - knowledge_agent.py:48 - Vector database initialized successfully
+2025-03-20 16:42:13,342 - __main__ - INFO - main.py:249 - Loading models
+2025-03-20 16:42:13,342 - knowledge_agent - INFO - knowledge_agent.py:98 - Initializing knowledge agent
+2025-03-20 16:42:13,342 - llm_manager - INFO - llm_manager.py:31 - Loading GGUF model from ./models/mistral-7b-instruct-v0.1.Q4_K_M.gguf
+2025-03-20 16:42:13,361 - utils - INFO - utils.py:27 - GPU memory: 0.00GB allocated, 0.00GB reserved
+2025-03-20 16:42:13,806 - llm_manager - INFO - llm_manager.py:52 - GGUF model loaded successfully
+2025-03-20 16:42:13,806 - llm_manager - INFO - llm_manager.py:56 - Loading embedding model from sentence-transformers/all-MiniLM-L6-v2
+2025-03-20 16:42:13,941 - knowledge_agent - INFO - knowledge_agent.py:101 - Knowledge agent initialized
+2025-03-20 16:42:13,941 - __main__ - INFO - main.py:253 - Ensuring models are loaded...
+2025-03-20 16:42:13,941 - __main__ - INFO - main.py:258 - Models already loaded
+2025-03-20 16:42:13,941 - __main__ - INFO - main.py:261 - Running test query to ensure system is working...
+2025-03-20 16:42:13,941 - utils - INFO - utils.py:27 - GPU memory: 0.00GB allocated, 0.00GB reserved
+2025-03-20 16:42:14,457 - knowledge_agent - INFO - knowledge_agent.py:129 - Processing query: Can you help me?
+2025-03-20 16:42:14,457 - knowledge_agent - INFO - knowledge_agent.py:134 - Extracted keywords from query: ['help']
+2025-03-20 16:42:14,969 - vector_database - INFO - vector_database.py:222 - Querying database with: 'Can you help me?...' (n_results=8)
+2025-03-20 16:42:15,074 - knowledge_graph - WARNING - knowledge_graph.py:210 - Knowledge graph not built or empty
+2025-03-20 16:42:15,074 - vector_database - INFO - vector_database.py:273 - Found 3 relevant documents
+2025-03-20 16:42:15,075 - knowledge_agent - INFO - knowledge_agent.py:147 - Found 3 relevant documents
+2025-03-20 16:42:15,075 - knowledge_agent - INFO - knowledge_agent.py:154 -   Doc 0: Relevance=0.85, Type=keyword, Source=Leah_s-Story_-Empowered-with-Purpose-_-PreBorn_-__1.txt
+2025-03-20 16:42:15,075 - knowledge_agent - INFO - knowledge_agent.py:154 -   Doc 1: Relevance=0.85, Type=keyword, Source=Testimonies-_-PreBorn__3.txt
+2025-03-20 16:42:15,075 - knowledge_agent - INFO - knowledge_agent.py:154 -   Doc 2: Relevance=0.85, Type=keyword, Source=Testimonies-_-PreBorn__1.txt
+2025-03-20 16:42:15,075 - knowledge_agent - INFO - knowledge_agent.py:197 - Final context size (approximate tokens): 599
+2025-03-20 16:42:15,075 - utils - INFO - utils.py:27 - GPU memory: 0.00GB allocated, 0.00GB reserved
+2025-03-20 16:42:55,880 - llm_manager - DEBUG - llm_manager.py:91 - Generated response preview: Hello! Thank you for reaching out to PreBorn. We a...
+2025-03-20 16:42:55,880 - utils - INFO - utils.py:27 - GPU memory: 0.00GB allocated, 0.00GB reserved
+2025-03-20 16:43:11,993 - llm_manager - DEBUG - llm_manager.py:91 - Generated response preview: Hello! I'm here to assist you with your question. ...
+2025-03-20 16:43:11,993 - knowledge_agent - INFO - knowledge_agent.py:231 - Generated response for query (length: 593)
+2025-03-20 16:43:11,993 - utils - INFO - utils.py:27 - GPU memory: 0.00GB allocated, 0.00GB reserved
+2025-03-20 16:43:11,994 - __main__ - INFO - main.py:263 - Test query successful, received response of length 593
+2025-03-20 16:43:11,994 - __main__ - INFO - main.py:267 - Starting web server at http://localhost:8000
+2025-03-20 16:43:11,996 - web_server - INFO - web_server.py:194 - Starting web server at http://localhost:8000

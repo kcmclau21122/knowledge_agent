@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-Diagnostic script to check ChromaDB functionality
+Detailed ChromaDB Diagnostic Script
 """
 
 import logging
@@ -10,190 +10,151 @@ import chromadb
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 from chromadb.utils import embedding_functions
+import traceback
+import shutil
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout)
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('chroma_diagnostic_detailed.log', mode='w')
     ]
 )
 logger = logging.getLogger("chroma-diagnostic")
 
-def check_directory_permissions(directory):
-    """Check if the directory exists and has write permissions"""
-    directory = Path(directory)
+def detailed_chromadb_test(db_path, embedding_model):
+    """Comprehensive ChromaDB functionality test"""
+    logger.info("Starting detailed ChromaDB diagnostic")
     
-    logger.info(f"Checking directory: {directory}")
-    
-    if not directory.exists():
-        logger.info(f"Directory doesn't exist. Attempting to create it...")
+    try:
+        # Detailed Path and Permission Check
+        logger.info(f"Checking database path: {db_path}")
+        logger.info(f"Absolute path: {Path(db_path).resolve()}")
+        
+        if not os.path.exists(db_path):
+            logger.info(f"Creating database directory: {db_path}")
+            os.makedirs(db_path, exist_ok=True)
+        
+        # Check writability with detailed logging
         try:
-            directory.mkdir(parents=True, exist_ok=True)
-            logger.info(f"Successfully created directory: {directory}")
-        except Exception as e:
-            logger.error(f"Failed to create directory: {e}")
+            test_file = os.path.join(db_path, '.write_test')
+            with open(test_file, 'w') as f:
+                f.write('write test')
+            os.remove(test_file)
+            logger.info("Directory is writable")
+        except Exception as write_error:
+            logger.error(f"Directory write test failed: {write_error}")
+            logger.error(traceback.format_exc())
             return False
-    
-    # Check if directory is writable
-    try:
-        test_file = directory / ".write_test"
-        with open(test_file, 'w') as f:
-            f.write("test")
-        test_file.unlink()
-        logger.info(f"Directory is writable")
-        return True
-    except Exception as e:
-        logger.error(f"Directory is not writable: {e}")
-        return False
-
-def test_embedding_function(model_name):
-    """Test if the embedding function can be created"""
-    logger.info(f"Testing embedding function with model: {model_name}")
-    
-    try:
-        embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=model_name
-        )
         
-        # Test embedding with a sample text
-        sample_text = "This is a test document for embedding"
-        embedding = embedding_function([sample_text])
-        
-        logger.info(f"Successfully created embedding function and generated embeddings")
-        logger.info(f"Embedding shape: {len(embedding[0])} dimensions")
-        return True
-    except Exception as e:
-        logger.error(f"Failed to create embedding function: {e}")
-        return False
-
-def test_chromadb(db_path, embedding_model):
-    """Test basic ChromaDB functionality"""
-    logger.info(f"Testing ChromaDB at path: {db_path}")
-    
-    try:
-        # Initialize embedding function
-        logger.info("Initializing embedding function")
-        embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
-            model_name=embedding_model
-        )
-        
-        # Initialize ChromaDB client
-        logger.info("Initializing ChromaDB client")
-        client = chromadb.PersistentClient(path=str(db_path))
-        
-        # Create a test collection
-        logger.info("Creating test collection")
-        collection_name = "test_collection"
-        
-        # Try to get the collection if it exists, or create a new one
+        # Embedding Function Test
+        logger.info("Testing Embedding Function")
         try:
-            collection = client.get_collection(name=collection_name)
-            logger.info(f"Found existing collection: {collection_name}")
-        except:
+            embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+                model_name=embedding_model
+            )
+            
+            # Test embedding generation
+            test_texts = ["This is a test document", "Another test sentence"]
+            embeddings = embedding_function(test_texts)
+            
+            logger.info("Embedding generation successful")
+            logger.info(f"Embedding dimensions: {len(embeddings[0])}")
+        except Exception as embed_error:
+            logger.error(f"Embedding function test failed: {embed_error}")
+            logger.error(traceback.format_exc())
+            return False
+        
+        # ChromaDB Client Initialization Test
+        logger.info("Testing ChromaDB Client Initialization")
+        try:
+            client = chromadb.PersistentClient(path=str(db_path))
+            logger.info("ChromaDB client initialized successfully")
+        except Exception as client_error:
+            logger.error(f"ChromaDB client initialization failed: {client_error}")
+            logger.error(traceback.format_exc())
+            return False
+        
+        # Collection Creation and Management Test
+        logger.info("Testing Collection Operations")
+        try:
+            # Create a test collection, deleting it first if it exists
+            collection_name = "diagnostic_test_collection"
+            
+            # Remove existing collection if it exists
+            try:
+                client.delete_collection(name=collection_name)
+                logger.info(f"Deleted existing collection '{collection_name}'")
+            except:
+                # Collection doesn't exist, which is fine
+                pass
+            
+            # Create the collection
             collection = client.create_collection(
                 name=collection_name,
                 embedding_function=embedding_function
             )
-            logger.info(f"Created new collection: {collection_name}")
-        
-        # Add a test document
-        logger.info("Adding test document")
-        collection.add(
-            ids=["test1"],
-            documents=["This is a test document for ChromaDB"],
-            metadatas=[{"source": "diagnostic test"}]
-        )
-        
-        # Query the collection
-        logger.info("Querying test collection")
-        results = collection.query(
-            query_texts=["test document"],
-            n_results=1
-        )
-        
-        if results and len(results["documents"]) > 0:
-            logger.info(f"Successfully queried collection. Results: {results}")
+            logger.info(f"Collection '{collection_name}' created successfully")
             
-            # Get collection count
-            count = collection.count()
-            logger.info(f"Collection count: {count}")
+            # Add test documents
+            test_docs = [
+                "This is the first test document about machine learning.",
+                "Machine learning is a subset of artificial intelligence.",
+                "Artificial intelligence is transforming many industries."
+            ]
             
-            # List all collections
-            collections = client.list_collections()
-            logger.info(f"All collections: {collections}")
+            collection.add(
+                ids=[f"doc_{i}" for i in range(len(test_docs))],
+                documents=test_docs,
+                metadatas=[{"source": "diagnostic"} for _ in test_docs]
+            )
+            logger.info("Test documents added successfully")
             
-            # Get total document count across all collections
-            total_count = 0
-            all_collection_stats = []
+            # Verify document count
+            doc_count = collection.count()
+            logger.info(f"Document count in collection: {doc_count}")
             
-            for coll_name in collections:
-                try:
-                    coll = client.get_collection(name=coll_name)
-                    coll_count = coll.count()
-                    total_count += coll_count
-                    all_collection_stats.append({
-                        "name": coll_name,
-                        "count": coll_count
-                    })
-                except Exception as e:
-                    logger.warning(f"Error getting count for collection {coll_name}: {e}")
+            # Perform a query test
+            query_results = collection.query(
+                query_texts=["machine learning"],
+                n_results=2
+            )
             
-            logger.info(f"Total documents across all collections: {total_count}")
-            logger.info(f"Collection statistics: {all_collection_stats}")
+            logger.info("Query test completed successfully")
+            logger.info(f"Query results: {query_results}")
             
-            return True
-        else:
-            logger.error("Query returned no results")
+        except Exception as collection_error:
+            logger.error(f"Collection operations test failed: {collection_error}")
+            logger.error(traceback.format_exc())
             return False
-            
+        
+        logger.info("All ChromaDB tests passed successfully")
+        return True
+    
     except Exception as e:
-        logger.error(f"ChromaDB test failed: {e}")
-        import traceback
+        logger.error(f"Unexpected error in detailed ChromaDB test: {e}")
         logger.error(traceback.format_exc())
         return False
 
 def main():
-    """Main diagnostic function"""
+    """Main diagnostic entry point"""
     from config import Config
     
-    logger.info("Starting ChromaDB diagnostic")
+    logger.info("=" * 50)
+    logger.info("DETAILED CHROMADB DIAGNOSTIC")
     logger.info("=" * 50)
     
-    # Check Python version
-    logger.info(f"Python version: {sys.version}")
-    
-    # Check ChromaDB version
-    logger.info(f"ChromaDB version: {chromadb.__version__}")
-    
-    # Get configuration
-    db_dir = Config.DB_DIR
+    db_path = Config.DB_DIR
     embedding_model = Config.EMBEDDING_MODEL
     
-    logger.info(f"DB directory: {db_dir}")
-    logger.info(f"Embedding model: {embedding_model}")
+    logger.info(f"Database Path: {db_path}")
+    logger.info(f"Embedding Model: {embedding_model}")
     
-    # Check directory permissions
-    if not check_directory_permissions(db_dir):
-        logger.error("Directory permission check failed. Fix permissions before continuing.")
-        return False
+    success = detailed_chromadb_test(str(db_path), embedding_model)
     
-    # Test embedding function
-    if not test_embedding_function(embedding_model):
-        logger.error("Embedding function test failed. Check your sentence-transformers installation.")
-        return False
-    
-    # Test ChromaDB functionality
-    if not test_chromadb(db_dir, embedding_model):
-        logger.error("ChromaDB test failed. Check your ChromaDB installation and configuration.")
-        return False
-    
-    logger.info("=" * 50)
-    logger.info("ChromaDB diagnostic completed successfully!")
-    logger.info("Your ChromaDB installation appears to be working correctly.")
-    return True
+    sys.exit(0 if success else 1)
 
 if __name__ == "__main__":
-    success = main()
-    sys.exit(0 if success else 1)
+    main()

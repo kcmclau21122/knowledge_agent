@@ -14,9 +14,11 @@ from fastapi.templating import Jinja2Templates
 import uvicorn
 from pydantic import BaseModel
 from starlette.middleware.cors import CORSMiddleware
+import traceback
 
 from config import Config
 from knowledge_agent import KnowledgeAgent
+from utils import log_gpu_memory
 
 logger = logging.getLogger(__name__)
 
@@ -68,30 +70,44 @@ class WebServer:
         @self.app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
             await websocket.accept()
-            
+            logger.info("WebSocket connection opened")
+
             # Chat history for this session
             chat_history = []
             
             try:
                 while True:
+                    # Receive and parse the client message
                     data = await websocket.receive_json()
                     query = data.get("message", "")
+                    logger.info(f"Received WebSocket message: {query[:50]}...")
                     
                     # Add to chat history
                     chat_history.append({"role": "user", "content": query})
                     
-                    # Get response
+                    # Get response - Make sure response is properly captured
                     response = self.knowledge_agent.answer_question(query, chat_history)
+                    logger.info(f"Sending response: {response[:50]}...")
                     
                     # Add to chat history
                     chat_history.append({"role": "assistant", "content": response})
                     
-                    # Send response
+                    # Send response - ensure proper JSON formatting
                     await websocket.send_json({"message": response})
+                    logger.info("Response sent successfully")
             
             except WebSocketDisconnect:
                 logger.info("WebSocket disconnected")
-        
+            except Exception as e:
+                logger.error(f"WebSocket error: {str(e)}")
+                logger.error(traceback.format_exc())
+                try:
+                    # Try to send error message to client
+                    await websocket.send_json({"message": "I'm sorry, an error occurred while processing your request."})
+                except:
+                    # Connection might be closed already
+                    pass
+
         # REST API endpoints
         @self.app.post("/api/chat", response_model=ChatResponse)
         async def chat(request: ChatRequest):

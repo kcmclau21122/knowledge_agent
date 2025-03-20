@@ -1,0 +1,36 @@
+2025-03-20 13:44:24,646 - chroma-diagnostic - INFO - ==================================================
+2025-03-20 13:44:24,646 - chroma-diagnostic - INFO - DETAILED CHROMADB DIAGNOSTIC
+2025-03-20 13:44:24,646 - chroma-diagnostic - INFO - ==================================================
+2025-03-20 13:44:24,646 - chroma-diagnostic - INFO - Database Path: C:\Users\mclau\source\repos\knowledge_agent\data\vectordb
+2025-03-20 13:44:24,646 - chroma-diagnostic - INFO - Embedding Model: sentence-transformers/all-MiniLM-L6-v2
+2025-03-20 13:44:24,646 - chroma-diagnostic - INFO - Starting detailed ChromaDB diagnostic
+2025-03-20 13:44:24,646 - chroma-diagnostic - INFO - Checking database path: C:\Users\mclau\source\repos\knowledge_agent\data\vectordb
+2025-03-20 13:44:24,647 - chroma-diagnostic - INFO - Absolute path: C:\Users\mclau\source\repos\knowledge_agent\data\vectordb
+2025-03-20 13:44:24,647 - chroma-diagnostic - INFO - Directory is writable
+2025-03-20 13:44:24,647 - chroma-diagnostic - INFO - Testing Embedding Function
+2025-03-20 13:44:24,648 - sentence_transformers.SentenceTransformer - INFO - Load pretrained SentenceTransformer: sentence-transformers/all-MiniLM-L6-v2
+2025-03-20 13:44:25,060 - chroma-diagnostic - INFO - Embedding generation successful
+2025-03-20 13:44:25,060 - chroma-diagnostic - INFO - Embedding dimensions: 384
+2025-03-20 13:44:25,060 - chroma-diagnostic - INFO - Testing ChromaDB Client Initialization
+2025-03-20 13:44:25,073 - urllib3.util.retry - DEBUG - Converted retries value: 2 -> Retry(total=2, connect=None, read=None, redirect=None, status=None)
+2025-03-20 13:44:25,076 - chromadb.telemetry.product.posthog - INFO - Anonymized telemetry enabled. See                     https://docs.trychroma.com/telemetry for more information.
+2025-03-20 13:44:25,274 - chromadb.config - DEBUG - Starting component System
+2025-03-20 13:44:25,275 - chromadb.config - DEBUG - Starting component Posthog
+2025-03-20 13:44:25,275 - chromadb.config - DEBUG - Starting component OpenTelemetryClient
+2025-03-20 13:44:25,275 - chromadb.config - DEBUG - Starting component SqliteDB
+2025-03-20 13:44:25,532 - chromadb.config - DEBUG - Starting component SimpleQuotaEnforcer
+2025-03-20 13:44:25,533 - chromadb.config - DEBUG - Starting component SimpleRateLimitEnforcer
+2025-03-20 13:44:25,533 - chromadb.config - DEBUG - Starting component LocalSegmentManager
+2025-03-20 13:44:25,533 - chromadb.config - DEBUG - Starting component LocalExecutor
+2025-03-20 13:44:25,533 - chromadb.config - DEBUG - Starting component SegmentAPI
+2025-03-20 13:44:25,550 - chroma-diagnostic - INFO - ChromaDB client initialized successfully
+2025-03-20 13:44:25,550 - chroma-diagnostic - INFO - Testing Collection Operations
+2025-03-20 13:44:25,592 - chroma-diagnostic - INFO - Collection 'diagnostic_test_collection' created successfully
+2025-03-20 13:44:25,617 - chromadb.config - DEBUG - Starting component PersistentLocalHnswSegment
+2025-03-20 13:44:25,674 - chroma-diagnostic - INFO - Test documents added successfully
+2025-03-20 13:44:25,676 - chroma-diagnostic - INFO - Document count in collection: 3
+2025-03-20 13:44:25,703 - chroma-diagnostic - INFO - Query test completed successfully
+2025-03-20 13:44:25,703 - chroma-diagnostic - INFO - Query results: {'ids': [['doc_1', 'doc_0']], 'embeddings': None, 'documents': [['Machine learning is a subset of artificial intelligence.', 'This is the first test document about machine learning.']], 'uris': None, 'data': None, 'metadatas': [[{'source': 'diagnostic'}, {'source': 'diagnostic'}]], 'distances': [[0.83029399109034, 0.9947474822701392]], 'included': [<IncludeEnum.distances: 'distances'>, <IncludeEnum.documents: 'documents'>, <IncludeEnum.metadatas: 'metadatas'>]}
+2025-03-20 13:44:25,703 - chroma-diagnostic - INFO - All ChromaDB tests passed successfully
+2025-03-20 13:44:26,043 - urllib3.connectionpool - DEBUG - Starting new HTTPS connection (1): us.i.posthog.com:443
+2025-03-20 13:44:26,629 - urllib3.connectionpool - DEBUG - https://us.i.posthog.com:443 "POST /batch/ HTTP/1.1" 200 15
