@@ -13,6 +13,9 @@ import traceback
 import json
 import re
 import torch
+import hashlib
+import math
+import numpy as np
 
 from config import Config
 from knowledge_graph import KnowledgeGraph  # Using the updated KnowledgeGraph
@@ -26,6 +29,12 @@ class VectorDatabase:
         self.embedding_model = embedding_model or Config.EMBEDDING_MODEL
         self.collection_name = collection_name
         self.use_graph = use_graph if use_graph is not None else Config.USE_GRAPH
+        self.embedding_cache = {}  # Cache for query embeddings
+        self.max_cache_size = 1000  # Maximum number of cached embeddings
+        self.preload_embeddings = True
+        if self.preload_embeddings and torch.cuda.is_available():
+            # Preload common embeddings to GPU
+            self._preload_common_embeddings()
         
         # Ensure database directory exists
         os.makedirs(str(self.db_path), exist_ok=True)
@@ -67,6 +76,29 @@ class VectorDatabase:
             self.knowledge_graph = KnowledgeGraph(self)
             logger.info("Knowledge graph initialized")
     
+    def _preload_common_embeddings(self):
+        """Preload common embeddings to GPU memory for faster retrieval"""
+        try:
+            logger.info("Preloading common embeddings to GPU memory")
+            
+            # Common query types that might be frequently used
+            common_queries = [
+                "help", "about", "what is", "how to", "contact",
+                "services", "price", "location", "hours"
+            ]
+            
+            # Generate embeddings for these common queries
+            if self.embedding_function:
+                # This will force the model to load and generate embeddings
+                self.embedding_function(common_queries)
+                logger.info("Common embeddings preloaded successfully")
+            else:
+                logger.warning("Embedding function not available for preloading")
+                
+        except Exception as e:
+            logger.warning(f"Failed to preload embeddings: {e}")
+            # Non-critical error, just log and continue
+    
     def _get_or_create_collection(self):
         """Get or create a collection in the vector database"""
         try:
@@ -90,6 +122,140 @@ class VectorDatabase:
             else:
                 return self.db.create_collection(name=self.collection_name)
     
+    def _detect_information_type(self, query_text: str) -> str:
+        """Detect the type of information being requested"""
+        query_lower = query_text.lower()
+        
+        # Common information type patterns
+        patterns = {
+            "location": [
+                r"\b(where|location|address|office|center|branch|site|facility)\b",
+                r"\bnear\s+\w+\b",  # "near [city]"
+                r"\bin\s+\w+\b"      # "in [city/location]"
+            ],
+            "contact": [
+                r"\b(contact|phone|email|call|reach|touch)\b",
+                r"\bhow\s+(can|do|to)\s+(i|we|you)*\s+(contact|reach|email)\b"
+            ],
+            "hours": [
+                r"\b(hour|time|open|close|schedule|when)\b",
+                r"\bwhen\s+(are|is|do|can|will)\b"
+            ],
+            "pricing": [
+                r"\b(price|cost|fee|charge|payment|pay|afford|budget|expensive|cheap)\b",
+                r"\bhow\s+much\b"
+            ],
+            "service": [
+                r"\b(service|offering|provide|support|assist|help with)\b",
+                r"\bdo\s+you\s+(offer|provide|have|support)\b"
+            ],
+            "howto": [
+                r"\bhow\s+to\b",
+                r"\b(step|guide|instruction|tutorial|direction|process)\b"
+            ],
+            "team": [
+                r"\b(team|staff|employee|personnel|founder|leadership|management|CEO|executive|director)\b",
+                r"\bwho\s+(is|are|works|leads|manages|runs)\b"
+            ]
+        }
+        
+        # Check each pattern category
+        for info_type, pattern_list in patterns.items():
+            for pattern in pattern_list:
+                if re.search(pattern, query_lower):
+                    return info_type
+        
+        return "general"
+
+    def _specialized_retrieval(self, query_text: str, info_type: str, n_results: int) -> List[Dict[str, Any]]:
+        """Perform specialized retrieval based on information type"""
+        # Map of information types to optimized search queries
+        type_search_queries = {
+            "location": [
+                "list of locations",
+                "all locations",
+                "centers addresses",
+                "office locations",
+                "where are located"
+            ],
+            "contact": [
+                "contact information",
+                "how to contact",
+                "phone number email"
+            ],
+            "hours": [
+                "hours of operation",
+                "opening hours",
+                "business hours",
+                "when open"
+            ],
+            "pricing": [
+                "pricing information",
+                "cost details",
+                "price list",
+                "fee structure"
+            ],
+            "service": [
+                "services offered",
+                "what we provide",
+                "available services"
+            ],
+            "howto": [
+                "how to instructions",
+                "step by step guide",
+                "tutorial"
+            ],
+            "team": [
+                "our team",
+                "staff directory",
+                "leadership team"
+            ]
+        }
+        
+        combined_results = []
+        search_queries = type_search_queries.get(info_type, [])
+        
+        # Add the original query first for direct matching
+        search_queries.insert(0, query_text)
+        
+        # Try each specialized search query
+        for query in search_queries:
+            try:
+                # First try keyword search which is faster
+                keyword_results = self._keyword_search(query, n_results=n_results)
+                if keyword_results:
+                    # Boost relevance for specialized queries
+                    for result in keyword_results:
+                        result["relevance"] = min(result.get("relevance", 0) + 0.1, 0.99)
+                        result["match_type"] = f"specialized_{info_type}"
+                    combined_results.extend(keyword_results)
+                
+                # Then try vector search
+                vector_results = self._vector_search(query, n_results=n_results)
+                if vector_results:
+                    # Boost relevance for specialized queries
+                    for result in vector_results:
+                        result["relevance"] = min(result.get("relevance", 0) + 0.05, 0.95)
+                        result["match_type"] = f"specialized_{info_type}"
+                    combined_results.extend(vector_results)
+                    
+            except Exception as e:
+                logger.debug(f"Error in specialized search for '{query}': {e}")
+        
+        # Remove duplicates while preserving order
+        unique_results = []
+        seen_texts = set()
+        
+        for result in combined_results:
+            result_text = result["text"]
+            if result_text not in seen_texts:
+                seen_texts.add(result_text)
+                unique_results.append(result)
+        
+        # Sort by relevance and return top results
+        unique_results.sort(key=lambda x: x.get("relevance", 0), reverse=True)
+        return unique_results[:n_results] if unique_results else []
+
     def add_documents(self, documents: List[Dict[str, Any]]) -> int:
         """
         Add documents to the vector database with enhanced logging and error handling
@@ -200,56 +366,107 @@ class VectorDatabase:
     
     def query(self, query_text: str, n_results: int = None, use_keywords: bool = True, use_graph: bool = True) -> List[Dict[str, Any]]:
         """
-        Query the vector database for relevant documents with enhanced retrieval
-        
-        Args:
-            query_text: The query text
-            n_results: Number of results to return
-            use_keywords: Whether to use keyword matching
-            use_graph: Whether to use graph-based expansion
-            
-        Returns:
-            List of relevant documents with metadata and relevance scores
+        Query the vector database for relevant documents with enhanced retrieval and information type detection
         """
         n_results = n_results or Config.MAX_CONTEXT_DOCS
         
         try:
-            # Clear CUDA cache after generation
+            # Clear CUDA cache with reduced cooldown time
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-                time.sleep(0.5)  # Short cooldown
-
-            logger.info(f"Querying database with: '{query_text[:50]}...' (n_results={n_results})")
+                time.sleep(0.1)
             
-            # Multi-strategy retrieval approach
+            # Generate query hash for caching
+            query_hash = hashlib.md5(query_text.encode()).hexdigest()
+            
+            # NEW: Detect information type from query
+            info_type = self._detect_information_type(query_text)
+            logger.info(f"Query '{query_text[:50]}...' detected as {info_type} query type")
+            
+            # NEW: Try specialized retrieval for specific information types first
+            if info_type != "general":
+                specialized_docs = self._specialized_retrieval(query_text, info_type, n_results)
+                if specialized_docs:
+                    logger.info(f"Found {len(specialized_docs)} documents via specialized {info_type} retrieval")
+                    return specialized_docs
+            
+            # Initialize empty result list for standard retrieval
             documents = []
             
-            # Strategy 1: Keyword-based search
-            if use_keywords:
-                keyword_docs = self._keyword_search(query_text, n_results=n_results)
-                documents.extend(keyword_docs)
+            # Log query information
+            logger.info(f"Falling back to standard retrieval for: '{query_text[:50]}...'")
             
-            # Strategy 2: Vector similarity search
-            vector_docs = self._vector_search(query_text, n_results=n_results)
+            # EXISTING TIERED RETRIEVAL STRATEGY
+            
+            # Strategy 1: Keyword-based search (fastest, run first)
+            if use_keywords:
+                start_time = time.time()
+                keyword_docs = self._keyword_search(query_text, n_results=n_results)
+                keyword_time = time.time() - start_time
+                
+                documents.extend(keyword_docs)
+                logger.info(f"Found {len(keyword_docs)} documents via keyword search in {keyword_time:.3f}s")
+                
+                # If we have enough highly relevant documents from keywords, skip vector search
+                highly_relevant_docs = [doc for doc in keyword_docs if doc.get('relevance', 0) > 0.85]
+                if len(highly_relevant_docs) >= min(3, n_results):
+                    logger.info(f"Found {len(highly_relevant_docs)} highly relevant documents from keywords, skipping vector search")
+                    run_vector_search = False
+                else:
+                    run_vector_search = True
+            else:
+                run_vector_search = True  # No keywords, must use vector search
+            
+            # Strategy 2: Vector similarity search (if needed)
+            if run_vector_search:
+                # Check embedding cache first
+                cached_vector_docs = None
+                
+                if hasattr(self, 'embedding_cache') and query_hash in self.embedding_cache:
+                    cached_vector_docs = self.embedding_cache.get(query_hash)
+                    logger.info("Using cached vector search results")
+                
+                if cached_vector_docs:
+                    vector_docs = cached_vector_docs
+                else:
+                    start_time = time.time()
+                    vector_docs = self._vector_search(query_text, n_results=n_results)
+                    vector_time = time.time() - start_time
+                    logger.info(f"Found {len(vector_docs)} documents via vector search in {vector_time:.3f}s")
+                    
+                    # Cache vector search results
+                    if hasattr(self, 'embedding_cache'):
+                        # Initialize cache if not already
+                        if not hasattr(self, 'max_cache_size'):
+                            self.max_cache_size = 1000
+                            
+                        # Prune cache if necessary    
+                        if len(self.embedding_cache) >= self.max_cache_size:
+                            self.embedding_cache.pop(next(iter(self.embedding_cache)))
+                            
+                        # Store in cache
+                        self.embedding_cache[query_hash] = vector_docs
+                
+                # Add vector results to documents
+                documents.extend(vector_docs)
             
             # Combine results from both strategies, removing duplicates
             all_docs = {}
             
-            # Add keyword results (higher priority)
+            # First add keyword results (higher priority)
             for doc in documents:
-                doc_id = hash(doc["text"])
-                if doc_id not in all_docs or all_docs[doc_id]["relevance"] < doc["relevance"]:
+                doc_id = hash(doc.get("text", ""))
+                if doc_id not in all_docs or all_docs[doc_id]["relevance"] < doc.get("relevance", 0):
                     all_docs[doc_id] = doc
             
-            # Add vector results
-            for doc in vector_docs:
-                doc_id = hash(doc["text"])
-                if doc_id not in all_docs or all_docs[doc_id]["relevance"] < doc["relevance"]:
-                    all_docs[doc_id] = doc
-            
-            # Convert to list and sort by relevance
+            # Convert back to list and sort by relevance
             documents = list(all_docs.values())
-            documents.sort(key=lambda x: x["relevance"], reverse=True)
+            documents.sort(key=lambda x: x.get("relevance", 0), reverse=True)
+            
+            # Early return for simple queries (avoid graph traversal overhead)
+            if len(documents) >= n_results and documents[0].get("relevance", 0) > 0.9:
+                logger.info("Found high-relevance direct matches, skipping graph traversal")
+                return documents[:n_results]
             
             # Strategy 3: Graph-based expansion (if enabled and available)
             if use_graph and self.use_graph and hasattr(self, 'knowledge_graph') and self.knowledge_graph.built:
@@ -257,30 +474,38 @@ class VectorDatabase:
                     # Take top results for graph expansion
                     top_results = documents[:min(3, len(documents))]
                     if top_results:
+                        start_time = time.time()
                         expanded_results = self.knowledge_graph.query_with_traversal(
                             top_results, 
                             max_total_results=n_results,
-                            max_hops=2
+                            max_hops=Config.MAX_GRAPH_HOPS
                         )
+                        graph_time = time.time() - start_time
+                        
+                        logger.info(f"Found {len(expanded_results)} documents after graph traversal in {graph_time:.3f}s")
                         documents = expanded_results
                 except Exception as e:
                     logger.error(f"Error in graph-based expansion: {e}")
-                    # Continue with existing results
             
             # Return top results
-            documents = documents[:n_results]
-            
-            logger.info(f"Found {len(documents)} relevant documents")
-            return documents
-            
+            return documents[:n_results]
+                
         except Exception as e:
             logger.error(f"Error querying vector database: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
-            # Return empty list instead of raising exception
             return []
     
     def _keyword_search(self, query_text: str, n_results: int = 3) -> List[Dict[str, Any]]:
-        """Search using keyword matching in metadata with fixed operators"""
+        """
+        Search using fast keyword matching in document text and metadata
+        
+        Args:
+            query_text: Query text to search for
+            n_results: Number of results to return
+            
+        Returns:
+            List of document dictionaries with text, metadata and relevance scores
+        """
         # Extract potential keywords from query
         keywords = self._extract_query_keywords(query_text)
         
@@ -288,17 +513,15 @@ class VectorDatabase:
             return []
         
         documents = []
+        seen_docs = set()  # Track seen documents to avoid duplicates
         
-        # Try to find matches for each keyword
-        for keyword in keywords:
+        # Try to find direct matches for each keyword
+        for keyword in keywords[:3]:  # Limit to top 3 keywords for performance
             try:
-                # Use $eq or $in operators instead of $contains
-                where_filter = None
-                
-                # Try a direct document search without filters first
+                # Use direct document search for each keyword
                 results = self.collection.query(
-                    query_texts=[query_text],
-                    n_results=n_results
+                    query_texts=[keyword],  # Use the keyword directly for better matching
+                    n_results=min(n_results * 2, 10)  # Get more results initially
                 )
                 
                 # Process results
@@ -307,10 +530,17 @@ class VectorDatabase:
                         results["documents"][0],
                         results["metadatas"][0]
                     )):
-                        # Check for keyword match in the text manually
+                        # Generate a hash for deduplication
+                        doc_hash = hash(doc)
+                        if doc_hash in seen_docs:
+                            continue
+                        
+                        seen_docs.add(doc_hash)
+                        
+                        # Check for keyword match in the text
                         text_match = keyword.lower() in doc.lower()
                         
-                        # Check for keyword match in metadata manually
+                        # Check for keyword match in metadata
                         metadata_match = False
                         for meta_key, meta_value in metadata.items():
                             if meta_value and keyword.lower() in str(meta_value).lower():
@@ -319,14 +549,15 @@ class VectorDatabase:
                         
                         # Only include if there's a match
                         if text_match or metadata_match:
-                            # Use high base relevance for keyword matches
+                            # Calculate relevance score based on match quality
                             base_relevance = Config.KEYWORD_RELEVANCE_BASE
                             
-                            # Get keywords back as a list
+                            # Extract keywords from metadata if available
                             doc_keywords = []
                             if "keywords" in metadata and metadata["keywords"]:
                                 keyword_text = metadata["keywords"]
                                 if keyword_text:
+                                    # Handle different keyword formats (JSON array or comma-separated)
                                     if keyword_text.startswith("[") and keyword_text.endswith("]"):
                                         try:
                                             doc_keywords = json.loads(keyword_text)
@@ -335,13 +566,28 @@ class VectorDatabase:
                                     else:
                                         doc_keywords = [k.strip() for k in keyword_text.split(",")]
                             
-                            # Manually calculate relevance boost based on keyword match quality
+                            # Apply relevance boost based on match quality
                             relevance_boost = 0
-                            for doc_keyword in doc_keywords:
-                                if keyword.lower() in doc_keyword.lower():
-                                    relevance_boost = Config.KEYWORD_RELEVANCE_BOOST  # Direct keyword match
-                                    break
                             
+                            # Exact keyword match in document keywords (strongest signal)
+                            if any(kw.lower() == keyword.lower() for kw in doc_keywords):
+                                relevance_boost = Config.KEYWORD_RELEVANCE_BOOST * 1.5
+                            # Partial keyword match in document keywords
+                            elif any(keyword.lower() in kw.lower() for kw in doc_keywords):
+                                relevance_boost = Config.KEYWORD_RELEVANCE_BOOST
+                            # Exact match in document text (good signal)
+                            elif re.search(r'\b' + re.escape(keyword.lower()) + r'\b', doc.lower()):
+                                relevance_boost = Config.KEYWORD_RELEVANCE_BOOST * 0.8
+                            # Partial match in text (weak signal)
+                            elif keyword.lower() in doc.lower():
+                                relevance_boost = Config.KEYWORD_RELEVANCE_BOOST * 0.5
+                            
+                            # Further boost if keyword appears multiple times
+                            match_count = doc.lower().count(keyword.lower())
+                            if match_count > 1:
+                                density_boost = min(0.1, 0.02 * match_count)  # Up to +0.1 for many matches
+                                relevance_boost += density_boost
+                                
                             documents.append({
                                 "text": doc,
                                 "metadata": metadata,
@@ -352,24 +598,49 @@ class VectorDatabase:
                 logger.error(f"Error in keyword search for '{keyword}': {e}")
                 continue
         
-        return documents
+        # Sort by relevance for consistent ordering
+        documents.sort(key=lambda x: x["relevance"], reverse=True)
+        
+        # Return top results
+        return documents[:n_results]
 
-    
     def _vector_search(self, query_text: str, n_results: int = 5) -> List[Dict[str, Any]]:
-        """Search using vector similarity"""
+        """
+        Search using vector similarity with optimized processing
+        
+        Args:
+            query_text: Query text to search for
+            n_results: Number of results to return
+            
+        Returns:
+            List of document dictionaries with text, metadata and relevance scores
+        """
         try:
-            # Use smaller batch if using CUDA
+            # Adjust batch size based on available memory
             if torch.cuda.is_available():
-                # Process in smaller batches if needed
-                results = self.collection.query(
-                    query_texts=[query_text],
-                    n_results=min(n_results, 20)  # Limit initial results
-                )
+                # Get available GPU memory in MB
+                available_memory = torch.cuda.get_device_properties(0).total_memory / (1024 * 1024)
+                free_memory = available_memory - (torch.cuda.memory_allocated() / (1024 * 1024))
+                
+                # Adaptive batch size based on available memory
+                # Use smaller batch for limited memory
+                if free_memory < 1000:  # Less than 1GB free
+                    batch_results = 10
+                elif free_memory < 4000:  # 1-4GB free
+                    batch_results = 20
+                else:  # More than 4GB free
+                    batch_results = 50  # Increase this for faster processing
             else:
-                results = self.collection.query(
-                    query_texts=[query_text],
-                    n_results=n_results
-                )
+                # CPU mode - use requested number
+                batch_results = n_results
+                
+            # Execute vector search efficiently
+            logger.debug(f"Executing vector search with batch size {batch_results}")
+            results = self.collection.query(
+                query_texts=[query_text],
+                n_results=batch_results,
+                include=["documents", "metadatas", "distances"]
+            )
         
             documents = []
             if results["documents"] and len(results["documents"][0]) > 0:
@@ -378,8 +649,23 @@ class VectorDatabase:
                     results["metadatas"][0],
                     results["distances"][0] if "distances" in results else [0] * len(results["documents"][0])
                 )):
-                    # Convert distance to relevance score (0-1 scale)
-                    relevance = 1.0 - min(distance, 1.0) if distance is not None else 0.7
+                    # Skip empty documents
+                    if not doc or not doc.strip():
+                        continue
+                        
+                    # Convert distance to relevance score (0-1 scale) with sigmoid normalization
+                    # This gives better differentiation between results
+                    if distance is not None:
+                        # Lower distance is better, so 1 - distance gives relevance
+                        # Clamp to 0-1 range
+                        base_relevance = 1.0 - min(distance, 1.0)
+                        
+                        # Apply sigmoid normalization to enhance contrast between results
+                        # Adjust the 10 and -5 constants to tune the curve
+                        relevance = 1.0 / (1.0 + math.exp(-10 * (base_relevance - 0.5)))
+                    else:
+                        # Default relevance if no distance is provided
+                        relevance = 0.7
                     
                     documents.append({
                         "text": doc,
@@ -387,8 +673,12 @@ class VectorDatabase:
                         "relevance": relevance,
                         "match_type": "vector"
                     })
-            
+                
+                # Sort by relevance in descending order
+                documents.sort(key=lambda x: x["relevance"], reverse=True)
+                
             return documents
+            
         except Exception as e:
             logger.error(f"Error in vector search: {e}")
             return []

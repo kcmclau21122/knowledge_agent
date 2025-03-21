@@ -27,7 +27,7 @@ class KnowledgeGraph:
         self.graph_path = Path(Config.DB_DIR) / "knowledge_graph.pkl"
         
         # Try to load existing graph
-        self.load_graph()
+        self.load_graph(preload_content=True)
     
     def build_graph(self, force_rebuild=False):
         """Build or rebuild the knowledge graph from vector database"""
@@ -118,12 +118,12 @@ class KnowledgeGraph:
             logger.error(f"Error saving knowledge graph: {e}")
             return False
     
-    def load_graph(self):
+    def load_graph(self, preload_content=False):
         """Load the knowledge graph from disk"""
         if not os.path.exists(self.graph_path):
             logger.info(f"No existing knowledge graph found at {self.graph_path}")
             return False
-            
+                
         try:
             logger.info(f"Loading knowledge graph from {self.graph_path}")
             
@@ -139,38 +139,85 @@ class KnowledgeGraph:
             
             # If we have nodes in the saved graph, try to restore them
             if simplified_nodes:
-                try:
-                    # Get all documents from the collection to restore content
-                    collection_data = self.vector_db.collection.get()
+                # If preload_content is True, we'll fetch all documents at once
+                if preload_content and self.built:
+                    logger.info("Preloading document contents for all nodes in knowledge graph...")
+                    self.nodes = {}  # Clear the nodes dict first
                     
-                    if collection_data and 'ids' in collection_data and collection_data['ids']:
-                        doc_ids = collection_data['ids']
-                        documents = collection_data['documents']
+                    try:
+                        # Get all node IDs
+                        all_ids = list(simplified_nodes.keys())
                         
-                        # Reconstruct nodes with content from vector DB
-                        for i, doc_id in enumerate(doc_ids):
-                            if doc_id in simplified_nodes:
-                                node_data = simplified_nodes[doc_id]
-                                # Add content from vector DB
-                                node_data['content'] = documents[i]
-                                self.nodes[doc_id] = node_data
+                        # Process in batches to avoid memory issues
+                        batch_size = 500
+                        total_loaded = 0
+                        
+                        for i in range(0, len(all_ids), batch_size):
+                            batch_ids = all_ids[i:i+batch_size]
+                            logger.debug(f"Loading batch {i//batch_size + 1} of {(len(all_ids) + batch_size - 1)//batch_size} ({len(batch_ids)} nodes)")
+                            
+                            # Fetch this batch from the collection
+                            batch_data = self.vector_db.collection.get(ids=batch_ids)
+                            
+                            if batch_data and 'ids' in batch_data and batch_data['ids']:
+                                batch_doc_ids = batch_data['ids']
+                                batch_documents = batch_data['documents']
                                 
-                        logger.info(f"Restored {len(self.nodes)} nodes with content")
+                                # Process each document in the batch
+                                for j, doc_id in enumerate(batch_doc_ids):
+                                    if doc_id in simplified_nodes:
+                                        # Create new node with content
+                                        node_data = simplified_nodes[doc_id].copy()
+                                        node_data['content'] = batch_documents[j]
+                                        self.nodes[doc_id] = node_data
+                                        total_loaded += 1
                         
-                    else:
-                        logger.warning("Could not get collection data to restore node content")
+                        logger.info(f"Successfully preloaded {total_loaded} of {len(simplified_nodes)} nodes with content")
+                        
+                        # For any nodes that weren't loaded, use the simplified version
+                        for node_id, node_data in simplified_nodes.items():
+                            if node_id not in self.nodes:
+                                self.nodes[node_id] = node_data
+                                
+                    except Exception as e:
+                        logger.error(f"Error during preloading: {e}")
+                        logger.error(f"Falling back to standard loading")
+                        # Fall back to standard loading
+                        self.nodes = simplified_nodes
+                else:
+                    # Standard loading behavior - get content on demand
+                    try:
+                        # Get all documents from the collection to restore content
+                        collection_data = self.vector_db.collection.get()
+                        
+                        if collection_data and 'ids' in collection_data and collection_data['ids']:
+                            doc_ids = collection_data['ids']
+                            documents = collection_data['documents']
+                            
+                            # Reconstruct nodes with content from vector DB
+                            for i, doc_id in enumerate(doc_ids):
+                                if doc_id in simplified_nodes:
+                                    node_data = simplified_nodes[doc_id]
+                                    # Add content from vector DB
+                                    node_data['content'] = documents[i]
+                                    self.nodes[doc_id] = node_data
+                                    
+                            logger.info(f"Restored {len(self.nodes)} nodes with content")
+                            
+                        else:
+                            logger.warning("Could not get collection data to restore node content")
+                            # Still use the simplified nodes, even without content
+                            self.nodes = simplified_nodes
+                            
+                    except Exception as collection_error:
+                        logger.error(f"Error getting collection data: {collection_error}")
                         # Still use the simplified nodes, even without content
                         self.nodes = simplified_nodes
-                        
-                except Exception as collection_error:
-                    logger.error(f"Error getting collection data: {collection_error}")
-                    # Still use the simplified nodes, even without content
-                    self.nodes = simplified_nodes
             
             graph_size = f"{len(self.nodes)} nodes and {sum(len(edges) for edges in self.edges.values())} edges"
             logger.info(f"Knowledge graph loaded successfully: {graph_size}")
             return True
-            
+                
         except Exception as e:
             logger.error(f"Error loading knowledge graph: {e}")
             return False

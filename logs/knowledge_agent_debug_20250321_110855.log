@@ -1,0 +1,37 @@
+2025-03-21 11:08:55,735 - logging_test - INFO - main.py:125 - TEST: Logging system initialized
+2025-03-21 11:08:55,736 - __main__ - INFO - main.py:137 - Detailed logging successfully configured
+2025-03-21 11:08:55,736 - __main__ - INFO - main.py:138 - Log file location: C:\Users\mclau\source\repos\knowledge_agent\logs\knowledge_agent_debug_20250321_110855.log
+2025-03-21 11:08:55,736 - __main__ - INFO - main.py:193 - ==================================================
+2025-03-21 11:08:55,736 - __main__ - INFO - main.py:194 - KNOWLEDGE AGENT STARTING
+2025-03-21 11:08:55,746 - __main__ - INFO - main.py:195 - ==================================================
+2025-03-21 11:08:55,746 - __main__ - INFO - main.py:198 - Current Working Directory: C:\Users\mclau\source\repos\knowledge_agent
+2025-03-21 11:08:55,746 - __main__ - INFO - main.py:199 - Python Version: 3.10.16 | packaged by conda-forge | (main, Dec  5 2024, 14:07:43) [MSC v.1942 64 bit (AMD64)]
+2025-03-21 11:08:55,746 - __main__ - INFO - main.py:200 - Python Executable: C:\Users\mclau\anaconda3\envs\knowledge_ai\python.exe
+2025-03-21 11:08:55,746 - __main__ - INFO - main.py:213 - Using custom knowledge directory: C:/TestData/preborn
+2025-03-21 11:08:55,746 - __main__ - INFO - main.py:217 - Knowledge Directory Path: C:\TestData\preborn
+2025-03-21 11:08:55,747 - __main__ - INFO - main.py:218 - Knowledge Directory Exists: True
+2025-03-21 11:08:55,748 - __main__ - INFO - main.py:224 - Total files/directories in knowledge directory: 433
+2025-03-21 11:08:55,748 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\12-Babies-of-Christmas-Day-7_-Breonna_s-Mom-was-Given-the-Courage-to-Choose-Life-_-PreBorn_.txt
+2025-03-21 11:08:55,748 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2016-990-for-Pre-Born.txt
+2025-03-21 11:08:55,748 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2016-Annual-Report-_-PreBorn_.txt
+2025-03-21 11:08:55,748 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2017-Annual-Report-_-PreBorn_.txt
+2025-03-21 11:08:55,748 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2017-Annual-Report.txt
+2025-03-21 11:08:55,749 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2017-MP-Financial-Statements-v2.txt
+2025-03-21 11:08:55,749 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2017-MP-Financial-Statements-v2_1.txt
+2025-03-21 11:08:55,749 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2018-990-for-Pre-Born.txt
+2025-03-21 11:08:55,749 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2018-990-for-Pre-Born_1.txt
+2025-03-21 11:08:55,749 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2018-Annual-Report-231x300.img.txt
+2025-03-21 11:08:55,749 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2018-Annual-Report.txt
+2025-03-21 11:08:55,749 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2018-Annual-Report_1.txt
+2025-03-21 11:08:55,749 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2018-MP-Financial-Statements-v2.txt
+2025-03-21 11:08:55,749 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2019-990-public-disclosure.txt
+2025-03-21 11:08:55,750 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2019-Annual-Report-266x300.img.txt
+2025-03-21 11:08:55,750 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2019-Annual-Report-_-PreBorn_.txt
+2025-03-21 11:08:55,750 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2019-Annual-Report.txt
+2025-03-21 11:08:55,750 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2019-MP-Financial-Statements-v2.txt
+2025-03-21 11:08:55,750 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2019-MP-Financial-Statements-v2_1.txt
+2025-03-21 11:08:55,751 - __main__ - INFO - main.py:226 -   C:\TestData\preborn\2019-_-Page-2-of-3-_-PreBorn_.txt
+2025-03-21 11:08:55,751 - __main__ - INFO - main.py:228 -   ... and 413 more
+2025-03-21 11:08:55,752 - utils - INFO - utils.py:19 - Directories created
+2025-03-21 11:08:55,759 - templates - INFO - templates.py:252 - Templates and static files created
+2025-03-21 11:08:55,759 - __main__ - INFO - main.py:242 - Initializing Knowledge Agent for PreBorn

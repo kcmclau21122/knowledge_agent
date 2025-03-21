@@ -16,6 +16,7 @@ from document_processor import DocumentProcessor
 from vector_database import VectorDatabase
 from llm_manager import LLMManager
 from utils import create_directories, log_gpu_memory
+from query_cache import QueryCache
 
 # Import semantic processor if available
 try:
@@ -28,29 +29,32 @@ logger = logging.getLogger(__name__)
 
 class KnowledgeAgent:
     def __init__(self, company_name: str = "Our Company", use_graph: bool = True):
-        """Initialize the knowledge agent"""
-        self.company_name = company_name
-        self.use_graph = use_graph
+            """Initialize the knowledge agent"""
+            self.company_name = company_name
+            self.use_graph = use_graph
+            
+            # Initialize LLM manager first since it's needed for semantic processing
+            self.llm_manager = LLMManager()
+            
+            # Initialize document processor with LLM manager for semantic processing
+            self.document_processor = DocumentProcessor(llm_manager=self.llm_manager)
+            
+            # Initialize query cache
+            self.query_cache = QueryCache()
+            
+            # Initialize directories
+            create_directories()
+            
+            # Initialize vector database with better error handling
+            try:
+                logger.info("Initializing vector database")
+                self.vector_db = VectorDatabase(use_graph=use_graph)
+                logger.info("Vector database initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize vector database: {e}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                raise RuntimeError(f"Failed to initialize Knowledge Agent: {e}")
         
-        # Initialize LLM manager first since it's needed for semantic processing
-        self.llm_manager = LLMManager()
-        
-        # Initialize document processor with LLM manager for semantic processing
-        self.document_processor = DocumentProcessor(llm_manager=self.llm_manager)
-        
-        # Initialize directories
-        create_directories()
-        
-        # Initialize vector database with better error handling
-        try:
-            logger.info("Initializing vector database")
-            self.vector_db = VectorDatabase(use_graph=use_graph)
-            logger.info("Vector database initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize vector database: {e}")
-            logger.error(f"Traceback: {traceback.format_exc()}")
-            raise RuntimeError(f"Failed to initialize Knowledge Agent: {e}")
-    
     def ingest_knowledge_base(self, knowledge_dir=None):
         """Process and ingest all documents in the knowledge directory with detailed logging"""
         knowledge_dir = knowledge_dir or Config.KNOWLEDGE_DIR
@@ -115,16 +119,20 @@ class KnowledgeAgent:
         Returns:
             Generated response text
         """
-
-        log_gpu_memory()  # Log before model loading
-        
         if chat_history is None:
             chat_history = []
-
+            
+        # Check if query is in cache (only for queries without chat history)
+        if not chat_history:
+            cached_response = self.query_cache.get(query)
+            if cached_response:
+                logger.info(f"Cache hit: Retrieved response for query: {query[:50]}...")
+                return cached_response.get('response', '')
+            
         # Clear CUDA cache before processing
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
-            time.sleep(0.5)  # Short cooldown    
+            time.sleep(0.1)  # Short cooldown    
         
         logger.info(f"Processing query: {query}")
         
@@ -207,15 +215,28 @@ class KnowledgeAgent:
             system_prompt = Config.SYSTEM_PROMPT.format(company_name=self.company_name)
                         
             # Format for Mistral GGUF model
-            prompt = f"""<s>[INST]
-            {system_prompt}
+            if any(term in query.lower() for term in ["location", "where", "in", "city", "state"]):
+                prompt = f"""<s>[INST]
+                {system_prompt}
 
-            USER QUESTION: {query}
+                SPECIAL INSTRUCTION: This is a question about PreBorn's physical locations. ONLY use information about where PreBorn has physical facilities or offices. If any information about legislation, studies, or statistics appears in the context, completely ignore it.
 
-            KNOWLEDGE BASE INFORMATION:
-            {context}
-            [/INST]
-            """
+                USER QUESTION: {query}
+
+                KNOWLEDGE BASE INFORMATION:
+                {context}
+                [/INST]
+                """
+            else:    
+                prompt = f"""<s>[INST]
+                {system_prompt}
+
+                USER QUESTION: {query}
+
+                KNOWLEDGE BASE INFORMATION:
+                {context}
+                [/INST]
+                """
 
             # Generate response
             try:

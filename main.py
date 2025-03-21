@@ -165,12 +165,13 @@ def setup_detailed_logging(log_dir=None, log_level=logging.DEBUG):
 def main():
     """Main entry point for the application"""
     # Parse command line arguments
+    # Parse command line arguments
     parser = argparse.ArgumentParser(description="Knowledge Agent - Open Source Botpress Alternative")
     parser.add_argument("--company", type=str, default="Our Company", help="Company name")
     parser.add_argument("--host", type=str, default=Config.HOST, help="Web server host")
     parser.add_argument("--port", type=int, default=Config.PORT, help="Web server port")
     parser.add_argument("--gpu-memory", type=float, default=0.7, 
-                   help="Fraction of GPU memory to use (default: 0.7)")
+                help="Fraction of GPU memory to use (default: 0.7)")
     parser.add_argument("--offload", action="store_true", 
                     help="Enable CPU offloading for large models")
     parser.add_argument("--knowledge-dir", type=str, default=None, help="Path to knowledge directory")
@@ -181,8 +182,9 @@ def main():
     parser.add_argument("--no-cuda", action="store_true", help="Disable CUDA even if available")
     parser.add_argument("--log-dir", type=str, default=None, help="Path to log directory")
     parser.add_argument("--log-level", type=str, default="DEBUG", 
-                       choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
-                       help="Logging level")
+                    choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+                    help="Logging level")
+    parser.add_argument("--no-graph", action="store_true", help="Disable knowledge graph for retrieval")
     args = parser.parse_args()
     
     # Setup extremely detailed logging
@@ -228,9 +230,6 @@ def main():
                     logger.info(f"  ... and {len(files) - 20} more")
             except Exception as e:
                 logger.error(f"Error listing directory contents: {e}")
-
-    parser.add_argument("--no-graph", action="store_true", 
-                    help="Disable knowledge graph for retrieval")
 
     # Create necessary directories
     create_directories()
@@ -279,9 +278,9 @@ if __name__ == "__main__":
         print("No arguments provided. Using default test configuration.")
         sys.argv = [
             sys.argv[0], 
-            #"--ingest",
+            "--ingest",
             "--log-level", "DEBUG", 
-            "--gpu-memory=0.8",
+            "--gpu-memory=10.0",
             "--log-dir", "./logs", 
             "--knowledge-dir", "C:/TestData/preborn", 
             "--company", "PreBorn"

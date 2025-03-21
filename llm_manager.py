@@ -27,7 +27,7 @@ class LLMManager:
         self.embedding_model = None
     
     def load_models(self):
-        """Load the LLM and embedding models"""
+        """Load the LLM and embedding models with optimized performance settings"""
         logger.info(f"Loading GGUF model from {self.model_path}")
         log_gpu_memory()  # Log before model loading
 
@@ -37,24 +37,32 @@ class LLMManager:
             raise FileNotFoundError(f"Model file not found: {self.model_path}")
 
         try:
-            # For GGUF models, we use llama-cpp-python
-            n_gpu_layers = -1  # Use all GPU layers if CUDA is available
-            n_ctx = Config.CONTEXT_WINDOW_SIZE  # Context window size
+            # Performance optimizations for GGUF models
+            n_gpu_layers = -1  # Use all GPU layers
+            n_ctx = Config.CONTEXT_WINDOW_SIZE
             
-            # Initialize the GGUF model
+            # Initialize the GGUF model with optimized parameters
             self.model = Llama(
                 model_path=self.model_path,
                 n_gpu_layers=n_gpu_layers,
                 n_ctx=n_ctx,
-                verbose=False
+                verbose=False,
+                n_batch=1024,  # Increase batch size for faster processing
+                f16_kv=True,  # Use half-precision for key/value cache
+                use_mlock=True  # Pin memory to prevent paging
             )
             
-            logger.info("GGUF model loaded successfully")
+            logger.info("GGUF model loaded successfully with performance optimizations")
             
             # Load the embedding model (unchanged)
             try:
                 logger.info(f"Loading embedding model from {self.embedding_model_name}")
                 self.embedding_model = SentenceTransformer(self.embedding_model_name)
+                
+                # Optimize embedding model if using CUDA
+                if torch.cuda.is_available():
+                    self.embedding_model = self.embedding_model.to('cuda')
+                    logger.info("Moved embedding model to CUDA")
             except Exception as e:
                 logger.warning(f"Failed to load embedding model: {e}")
                 logger.info("Knowledge agent will run without embedding functionality")
@@ -63,7 +71,7 @@ class LLMManager:
             logger.error(f"Error loading GGUF model: {str(e)}")
             logger.error(traceback.format_exc())
             # Fallback handling code...
-    
+
     def generate_response(self, prompt: str, max_new_tokens: int = None, 
                         temperature: float = None, top_p: float = None) -> str:
         # Use values from Config if not provided
@@ -71,21 +79,23 @@ class LLMManager:
         temperature = temperature or Config.GENERATION_TEMPERATURE
         top_p = top_p or Config.GENERATION_TOP_P
 
-        """Generate a response using the GGUF model"""
+        """Generate a response using the GGUF model with optimized parameters"""
         log_gpu_memory()  # Log before generation
 
         if not self.model:
             raise ValueError("Models not loaded. Call load_models() first.")
         
         try:
-            # Generate with llama-cpp
+            # Generate with llama-cpp with performance optimizations
             output = self.model.create_completion(
                 prompt,
                 max_tokens=max_new_tokens,
                 temperature=temperature,
                 top_p=top_p,
                 stop=["</s>", "<|im_end|>"],  # Common stop tokens for Mistral
-                echo=False
+                echo=False,
+                top_k=40,  # Limit vocabulary search space
+                repeat_penalty=1.1  # Slightly penalize repetition for faster completion
             )
             
             # Extract the generated text
@@ -100,7 +110,6 @@ class LLMManager:
         except Exception as e:
             logger.error(f"Error generating response: {e}")
             return "I apologize, but I'm having trouble generating a response at the moment. Please try again."
-
 
     
     def get_embeddings(self, texts):

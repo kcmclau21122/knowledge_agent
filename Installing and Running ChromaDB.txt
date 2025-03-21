@@ -65,7 +65,14 @@ def __init__(self, db_path=None, embedding_model=None, collection_name="knowledg
         self.db = chromadb.HttpClient(host="localhost", port=8000)
     else:
         # Use embedded ChromaDB
-        self.db = chromadb.PersistentClient(path=str(self.db_path))
+        self.db = chromadb.PersistentClient(
+            path=str(self.db_path),
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True,
+                chroma_db_impl="duckdb+parquet"  # Faster implementation
+    )
+)
         
     self.collection = self._get_or_create_collection()
 ```
@@ -213,7 +220,14 @@ In our refactored code, ChromaDB is handled in the `vector_database.py` module:
 
 1. The `VectorDatabase` class initializes ChromaDB in persistent mode:
    ```python
-   self.db = chromadb.PersistentClient(path=str(self.db_path))
+        self.db = chromadb.PersistentClient(
+            path=str(self.db_path),
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True,
+                chroma_db_impl="duckdb+parquet"  # Faster implementation
+    )
+)
    ```
 
 2. To run the Knowledge Agent with ChromaDB:

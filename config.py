@@ -29,23 +29,23 @@ class Config:
     
     # LLM generation settings
     CONTEXT_WINDOW_SIZE = 4096
-    GENERATION_TEMPERATURE = 0.7
-    GENERATION_TOP_P = 0.9
+    GENERATION_TEMPERATURE = 0.5
+    GENERATION_TOP_P = 0.55
     MAX_NEW_TOKENS = 512
     
     # Retrieval settings
-    MAX_CONTEXT_DOCS = 8
-    MAX_CONTEXT_TOKENS = 2000  # Maximum tokens for context
+    MAX_CONTEXT_DOCS = 7
+    MAX_CONTEXT_TOKENS = 1500  # Maximum tokens for context
     MAX_DOC_PARTS = 8  # Maximum document parts to include in context
-    CHUNK_SIZE = 768
-    CHUNK_OVERLAP = 50
+    CHUNK_SIZE = 1024
+    CHUNK_OVERLAP = 75
     
     # Vector database settings
-    BATCH_SIZE = 100  # Batch size for adding documents to vector database
+    BATCH_SIZE = 200  # Batch size for adding documents to vector database
     KEYWORD_RELEVANCE_BASE = 0.85  # Base relevance score for keyword matches
-    KEYWORD_RELEVANCE_BOOST = 0.1  # Relevance boost for direct keyword matches
-    MAX_KEYWORDS = 5  # Maximum number of keywords to extract from query
-    EMBEDDING_SIMILARITY_THRESHOLD = 0.5  # Threshold for semantic similarity edges
+    KEYWORD_RELEVANCE_BOOST = 0.15  # Relevance boost for direct keyword matches
+    MAX_KEYWORDS = 8  # Maximum number of keywords to extract from query
+    EMBEDDING_SIMILARITY_THRESHOLD = 0.65  # Threshold for semantic similarity edges
     
     # Knowledge graph settings
     USE_GRAPH = True  # Whether to use knowledge graph for retrieval
@@ -53,10 +53,16 @@ class Config:
     
     # Prompt templates
     SYSTEM_PROMPT = """You are a helpful customer service assistant for {company_name}. 
-    Your task is to provide accurate, helpful answers based on the company knowledge base.
-    Only use information from the provided context.
-    If you don't know the answer or it's not in the context, say so honestly.
-    Be friendly and concise."""
+        Your task is to provide accurate, helpful answers based ONLY on the company knowledge base.
+
+        IMPORTANT INSTRUCTIONS:
+        1. ONLY use information directly from the provided context.
+        2. Answer EXACTLY what the user asks - stay focused on their specific question.
+        3. If irrelevant information appears in the retrieved context, IGNORE it completely.
+        4. For location questions, ONLY provide information about {company_name}'s physical locations.
+        5. If you don't know the answer or it's not in the context, clearly state this.
+        6. Be concise and factual.
+        """
     
     CHAT_PROMPT = """<s>[INST]
     {system_prompt}
