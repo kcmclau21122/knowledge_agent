@@ -10,12 +10,14 @@ import torch
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from datetime import datetime
+import html
 
 from config import Config
 from document_processor import DocumentProcessor
 from vector_database import VectorDatabase
 from llm_manager import LLMManager
 from utils import create_directories, log_gpu_memory
+from url_detection import convert_urls_to_hyperlinks
 from query_cache import QueryCache
 
 # Import semantic processor if available
@@ -156,7 +158,7 @@ class KnowledgeAgent:
                 
                 # Log relevance scores for debugging
                 for i, doc in enumerate(relevant_docs):
-                    relevance = doc.get('relevance', 'Unknown')
+                    relevance = doc.get('relevance', 0)
                     match_type = doc.get('match_type', 'Unknown')
                     source = doc.get('metadata', {}).get('source', 'Unknown')
                     logger.info(f"  Doc {i}: Relevance={relevance:.2f}, Type={match_type}, Source={source}")
@@ -204,14 +206,22 @@ class KnowledgeAgent:
             context = "\n\n---\n\n".join(context_parts)
             logger.info(f"Final context size (approximate tokens): {total_tokens}")
                             
-            # Format chat history
+            # Format chat history - use up to 5 most recent messages for context
             chat_history_text = ""
-            for message in chat_history[-5:]:  # Only use the last 5 messages
+                        
+            # Filter out messages with empty content
+            filtered_history = [msg for msg in chat_history if msg.get("content", "").strip()]
+            
+            # Format recent messages
+            for message in filtered_history[-5:]:
                 role = message.get("role", "user")
                 content = message.get("content", "")
+                # Skip empty messages
+                if not content.strip():
+                    continue
                 chat_history_text += f"<{role}>\n{content}\n</{role}>\n"
             
-            # Build the prompt with simplified formatting for OPT model
+            # Build the prompt with simplified formatting for Mistral model
             system_prompt = Config.SYSTEM_PROMPT.format(company_name=self.company_name)
                         
             # Format for Mistral GGUF model
@@ -219,8 +229,10 @@ class KnowledgeAgent:
                 prompt = f"""<s>[INST]
                 {system_prompt}
 
-                SPECIAL INSTRUCTION: This is a question about PreBorn's physical locations. ONLY use information about where PreBorn has physical facilities or offices. If any information about legislation, studies, or statistics appears in the context, completely ignore it.
+                SPECIAL INSTRUCTION: This is a question about {self.company_name}'s physical locations. ONLY use information about where {self.company_name} has physical facilities or offices. If any information about legislation, studies, or statistics appears in the context, completely ignore it.
 
+                {chat_history_text if chat_history_text else ""}
+                
                 USER QUESTION: {query}
 
                 KNOWLEDGE BASE INFORMATION:
@@ -228,15 +240,12 @@ class KnowledgeAgent:
                 [/INST]
                 """
             else:    
-                prompt = f"""<s>[INST]
-                {system_prompt}
-
-                USER QUESTION: {query}
-
-                KNOWLEDGE BASE INFORMATION:
-                {context}
-                [/INST]
-                """
+                prompt = Config.CHAT_PROMPT.format(
+                    system_prompt=system_prompt,
+                    context=context,
+                    chat_history=chat_history_text,
+                    query=query
+                )
 
             # Generate response
             try:
@@ -249,24 +258,81 @@ class KnowledgeAgent:
                     logger.warning("Empty response generated, providing fallback")
                     response = "I'm sorry, I couldn't find specific information about that in my knowledge base. Please try rephrasing your question or ask about something else."
                 
+                # IMPORTANT: Clean the response to remove any leaked system prompt or context
+                # This uses regex patterns to remove unwanted content
+                import re
+                
+                # Clean response by removing system prompt, instructions, and context
+                # List of patterns that might indicate system content
+                system_patterns = [
+                    # Match Mistral/Llama instruction pattern at the start of response only
+                    r"^\s*\[INST\].*?\[/INST\]\s*",
+                    
+                    # Match system prompt sections only if they appear at the start
+                    r"^\s*You are a helpful customer service assistant.*?(?=\n\n)",
+                    
+                    # Match knowledge base header but not content
+                    r"^\s*KNOWLEDGE BASE INFORMATION:\s*\n",
+                    
+                    # Only clean source/content markers at the beginning
+                    r"^\s*Source:.*?\n\nContent:",
+                    
+                    # Only remove instruction headers
+                    r"^\s*IMPORTANT INSTRUCTIONS?:\s*\n",
+                    
+                    # Only remove user question prefix
+                    r"^\s*USER QUESTION:\s*.*?\n\n"
+                ]
+
+                # Apply cleanup patterns
+                cleaned_response = response
+                for pattern in system_patterns:
+                    match = re.search(pattern, cleaned_response, re.DOTALL | re.IGNORECASE)
+                    if match:
+                        # Only remove matches that occur at the beginning
+                        start_pos = match.start()
+                        if start_pos <= 20:  # Allow for some whitespace
+                            cleaned_response = cleaned_response[match.end():].strip()
+
+                # Log if significant cleaning occurred
+                if len(cleaned_response) < len(response) * 0.9:  # If we removed more than 10%
+                    logger.info(f"Cleaned response text from {len(response)} to {len(cleaned_response)} characters")
+                    # Add a safety check - if too much was removed, keep original
+                    if len(cleaned_response) < 50 and len(response) > 200:
+                        logger.warning("Response was over-cleaned, reverting to original")
+                        cleaned_response = response
+
+                # Process the cleaned response to convert URLs to hyperlinks
+                # URL regex pattern - matches common URL formats
+                url_pattern = r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+(?:/[-\w%!./?=&#+:~]*)*'
+                
+                # Function to replace each URL with hyperlink
+                def replace_url(match):
+                    url = match.group(0)
+                    # Escape HTML entities in the URL to prevent injection
+                    safe_url = html.escape(url)
+                    return f'<a href="{safe_url}" target="_blank" rel="noopener noreferrer">{safe_url}</a>'
+                
+                # Replace URLs with hyperlinks in the cleaned response
+                response_with_links = re.sub(url_pattern, replace_url, cleaned_response)
+                                    
+                # Cache the cleaned, link-enhanced response
+                if not chat_history:
+                    self.query_cache.put(query, {"response": response_with_links})
+                    
                 log_gpu_memory()  # Log after model generation
-                return response
-                
+                return response_with_links
+
             except Exception as e:
                 logger.error(f"Error generating response: {e}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
                 return "I'm sorry, I encountered an error while processing your question. Please try again later or contact support."
                 
-            except Exception as e:
-                logger.error(f"Error generating response: {e}")
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                return "I'm sorry, I encountered an error while processing your question. Please try again later or contact support."
-    
-            
         except Exception as e:
             logger.error(f"Error answering question: {e}")
             logger.error(f"Traceback: {traceback.format_exc()}")
             return f"I'm sorry, I encountered an error while processing your question. Please try again later or contact support."
+    
     
     def _extract_query_keywords(self, query: str) -> List[str]:
         """Extract key terms from the query for better retrieval"""

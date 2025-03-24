@@ -2,12 +2,17 @@
 Web Server module for serving the Knowledge Agent API
 """
 
+"""
+Web Server module for serving the Knowledge Agent API
+"""
+
 import logging
 import os
 from typing import List, Dict, Any
 import shutil
+import uuid
 
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException, Depends, File, UploadFile, Form
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException, Depends, File, UploadFile, Form, Cookie, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -18,6 +23,40 @@ import traceback
 
 from config import Config
 from knowledge_agent import KnowledgeAgent
+from chat_session_manager import ChatSessionManager
+from utils import log_gpu_memory
+
+logger = logging.getLogger(__name__)
+
+# API Models
+class ChatRequest(BaseModel):
+    message: str
+    history: List[Dict[str, str]] = []
+
+class ChatResponse(BaseModel):
+    message: str
+
+"""
+Web Server module for serving the Knowledge Agent API
+"""
+
+import logging
+import os
+from typing import List, Dict, Any
+import shutil
+
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect, HTTPException, Depends, File, UploadFile, Form, Cookie, Query
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+import uvicorn
+from pydantic import BaseModel
+from starlette.middleware.cors import CORSMiddleware
+import traceback
+
+from config import Config
+from knowledge_agent import KnowledgeAgent
+from chat_session_manager import ChatSessionManager
 from utils import log_gpu_memory
 
 logger = logging.getLogger(__name__)
@@ -35,6 +74,9 @@ class WebServer:
         """Initialize the web server with the knowledge agent"""
         self.app = FastAPI(title=Config.APP_NAME, version=Config.VERSION)
         self.knowledge_agent = knowledge_agent
+        
+        # Initialize the session manager
+        self.session_manager = ChatSessionManager()
         
         # Set up templates
         self.templates = Jinja2Templates(directory="templates")
@@ -72,8 +114,22 @@ class WebServer:
             await websocket.accept()
             logger.info("WebSocket connection opened")
 
+            # Get session ID from query parameters or create a new one
+            query_params = websocket.query_params
+            session_id = query_params.get("session_id", str(uuid.uuid4()))
+            logger.info(f"Using session ID: {session_id}")
+            
+            # Initialize session if it doesn't exist
+            if not hasattr(self, 'chat_sessions'):
+                self.chat_sessions = {}
+            
+            # Create session if it doesn't exist
+            if session_id not in self.chat_sessions:
+                self.chat_sessions[session_id] = []
+                logger.info(f"Created new session: {session_id}")
+            
             # Chat history for this session
-            chat_history = []
+            chat_history = self.chat_sessions.get(session_id, [])
             
             try:
                 while True:
@@ -84,15 +140,17 @@ class WebServer:
                     
                     # Add to chat history
                     chat_history.append({"role": "user", "content": query})
+                    self.chat_sessions[session_id] = chat_history
                     
-                    # Get response - Make sure response is properly captured
+                    # Get response
                     response = self.knowledge_agent.answer_question(query, chat_history)
                     logger.info(f"Sending response: {response[:50]}...")
                     
                     # Add to chat history
                     chat_history.append({"role": "assistant", "content": response})
+                    self.chat_sessions[session_id] = chat_history
                     
-                    # Send response - ensure proper JSON formatting
+                    # Send response
                     await websocket.send_json({"message": response})
                     logger.info("Response sent successfully")
             
@@ -126,6 +184,24 @@ class WebServer:
             )
             
             return ChatResponse(message=response)
+        
+        # Session management endpoints
+        @self.app.get("/api/sessions/{session_id}")
+        async def get_session(session_id: str):
+            """
+            Get session history
+            
+            Args:
+                session_id: Session ID
+                
+            Returns:
+                Chat history for the session
+            """
+            history = self.session_manager.get_session_history(session_id)
+            if not history:
+                raise HTTPException(status_code=404, detail="Session not found")
+            
+            return {"messages": history}
         
         # Admin API endpoints
         @self.app.post("/api/admin/upload")
@@ -169,6 +245,27 @@ class WebServer:
                 logger.error(f"Error ingesting knowledge base: {str(e)}")
                 raise HTTPException(status_code=500, detail=str(e))
         
+        # Additional admin endpoints for session management
+        @self.app.get("/api/admin/sessions")
+        async def list_sessions():
+            """List all active sessions"""
+            try:
+                count = self.session_manager.get_active_session_count()
+                return {"message": f"Active sessions: {count}"}
+            except Exception as e:
+                logger.error(f"Error listing sessions: {str(e)}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
+        @self.app.post("/api/admin/sessions/cleanup")
+        async def cleanup_sessions():
+            """Manually trigger session cleanup"""
+            try:
+                self.session_manager.cleanup_expired_sessions()
+                return {"message": "Session cleanup triggered"}
+            except Exception as e:
+                logger.error(f"Error cleaning up sessions: {str(e)}")
+                raise HTTPException(status_code=500, detail=str(e))
+        
         # Health check endpoint
         @self.app.get("/health")
         async def health_check():
@@ -178,7 +275,11 @@ class WebServer:
             Returns:
                 JSON response with status
             """
-            return {"status": "ok", "version": Config.VERSION}
+            return {
+                "status": "ok", 
+                "version": Config.VERSION,
+                "active_sessions": self.session_manager.get_active_session_count()
+            }
     
     def run(self, host=None, port=None):
         """

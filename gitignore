@@ -43,12 +43,15 @@ share/python-wheels/
 *.egg
 
 # Model files and vector database (potentially large)
-data/models/*
-data/vectordb/*
+**/data/*
+**/vectordb/*
 
 # Ignore all model files
-models/**/*.gguf
+**/models/*.gguf
 *.gguf
+*.gguf
+mistral-7b-instruct-v0.1.Q4_K_M.gguf
+phi-2.Q4_K_M.gguf
 
 # Preserve directory structure but ignore content
 !data/models/.gitkeep
@@ -60,7 +63,7 @@ data/knowledge/*
 
 # Logs - very explicit patterns
 /logs/
-/logs/*
+**/logs/*
 logs/
 logs/*
 *.log
@@ -112,3 +115,7 @@ Thumbs.db
 # Embedding cached files
 **/node_modules/
 **/.cache/
+
+# query cache
+**/query_cache/*
+**/data

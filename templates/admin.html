@@ -35,6 +35,22 @@
                 <div id="ingest-status" class="mt-4"></div>
             </div>
         </div>
+
+        <!-- Session Management -->
+        <div class="mt-4 bg-white rounded-lg shadow-md p-4">
+            <h2 class="text-xl font-bold mb-4">Session Management</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <button id="list-sessions-btn" class="bg-blue-500 text-white px-4 py-2 rounded w-full mb-2">
+                        List Active Sessions
+                    </button>
+                    <button id="cleanup-sessions-btn" class="bg-yellow-500 text-white px-4 py-2 rounded w-full">
+                        Clean Up Expired Sessions
+                    </button>
+                </div>
+                <div id="session-status" class="p-2 border rounded bg-gray-50 min-h-16"></div>
+            </div>
+        </div>
     </main>
     
     <script>
@@ -98,6 +114,47 @@
                 }
             } catch (error) {
                 ingestStatus.innerHTML = `<p class="text-red-600">Error: ${error.message}</p>`;
+            }
+        });
+
+        // Session Management
+        const listSessionsBtn = document.getElementById('list-sessions-btn');
+        const cleanupSessionsBtn = document.getElementById('cleanup-sessions-btn');
+        const sessionStatus = document.getElementById('session-status');
+        
+        listSessionsBtn.addEventListener('click', async () => {
+            sessionStatus.innerHTML = '<p class="text-blue-600">Fetching active sessions...</p>';
+            
+            try {
+                const response = await fetch('/api/admin/sessions');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    sessionStatus.innerHTML = `<p class="text-green-600">${data.message}</p>`;
+                } else {
+                    sessionStatus.innerHTML = `<p class="text-red-600">Error: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                sessionStatus.innerHTML = `<p class="text-red-600">Error: ${error.message}</p>`;
+            }
+        });
+        
+        cleanupSessionsBtn.addEventListener('click', async () => {
+            sessionStatus.innerHTML = '<p class="text-blue-600">Cleaning up expired sessions...</p>';
+            
+            try {
+                const response = await fetch('/api/admin/sessions/cleanup', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    sessionStatus.innerHTML = `<p class="text-green-600">${data.message}</p>`;
+                } else {
+                    sessionStatus.innerHTML = `<p class="text-red-600">Error: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                sessionStatus.innerHTML = `<p class="text-red-600">Error: ${error.message}</p>`;
             }
         });
     </script>

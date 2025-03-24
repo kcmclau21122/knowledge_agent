@@ -22,6 +22,8 @@ class Config:
     PORT = 8000
     
     # LLM settings
+    #LLM_MODEL = "TheBloke/phi-2-GGUF"
+    #MODEL_PATH = "./models/phi-2.Q4_K_M.gguf"
     LLM_MODEL = "TheBloke/Mistral-7B-Instruct-v0.1-GGUF"
     MODEL_PATH = "./models/mistral-7b-instruct-v0.1.Q4_K_M.gguf"
     EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -50,6 +52,15 @@ class Config:
     # Knowledge graph settings
     USE_GRAPH = True  # Whether to use knowledge graph for retrieval
     MAX_GRAPH_HOPS = 2  # Maximum number of hops in graph traversal
+
+    # Knowledge graph settings
+    USE_GRAPH = True  # Whether to use knowledge graph for retrieval
+    MAX_GRAPH_HOPS = 2  # Maximum number of hops in graph traversal
+    
+    # Session settings
+    SESSION_EXPIRY = 3600  # Session expiry time in seconds (1 hour)
+    SESSION_SAVE_INTERVAL = 300  # Session save interval in seconds (5 minutes)
+    MAX_CHAT_HISTORY = 50  # Maximum number of messages to keep in chat history
     
     # Prompt templates
     SYSTEM_PROMPT = """You are a helpful customer service assistant for {company_name}. 
