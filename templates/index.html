@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ request.app.title }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .chat-container {
+            height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+        .chat-bubble {
+            position: relative;
+            padding: 10px 15px;
+            border-radius: 15px;
+            margin-bottom: 10px;
+            max-width: 80%;
+        }
+        .user-bubble {
+            background-color: #e3f2fd;
+            margin-left: auto;
+            border-bottom-right-radius: 0;
+        }
+        .assistant-bubble {
+            background-color: #f5f5f5;
+            margin-right: auto;
+            border-bottom-left-radius: 0;
+        }
+        .typing-indicator {
+            display: none;
+            margin-bottom: 10px;
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background-color: #888;
+            border-radius: 50%;
+            margin: 0 2px;
+            animation: typing 1s infinite;
+        }
+        .typing-indicator span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+        .typing-indicator span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+        @keyframes typing {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-5px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <header class="bg-blue-600 text-white p-4">
+        <h1 class="text-2xl font-bold">Knowledge Agent</h1>
+    </header>
+    
+    <main class="container mx-auto p-4">
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <div id="chat-container" class="chat-container mb-4 p-2">
+                <div id="chat-messages"></div>
+                <div class="typing-indicator" id="typing-indicator">
+                    <div class="assistant-bubble" style="padding: 8px 12px;">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex">
+                <input type="text" id="user-input" class="flex-grow border rounded-l p-2" placeholder="Ask a question...">
+                <button id="send-btn" class="bg-blue-600 text-white px-4 py-2 rounded-r">Send</button>
+            </div>
+        </div>
+        
+        <div class="mt-4 text-center text-sm text-gray-500">
+            <p>Session ID: <span id="session-id-display">Not connected</span></p>
+        </div>
+    </main>
+    
+    <script>
+        // Get or create session ID from localStorage
+        let sessionId = localStorage.getItem('knowledgeAgentSessionId');
+        
+        // Set up WebSocket connection with session ID if available
+        const wsUrl = sessionId 
+            ? `ws://${window.location.host}/ws?session_id=${sessionId}`
+            : `ws://${window.location.host}/ws`;
+        
+        const socket = new WebSocket(wsUrl);
+        const chatMessages = document.getElementById('chat-messages');
+        const userInput = document.getElementById('user-input');
+        const sendButton = document.getElementById('send-btn');
+        const typingIndicator = document.getElementById('typing-indicator');
+        const sessionIdDisplay = document.getElementById('session-id-display');
+        
+        // Chat history
+        let chatHistory = [];
+        let isWaitingForResponse = false;
+        
+        // Send message function
+        function sendMessage() {
+            const message = userInput.value.trim();
+            if (!message || isWaitingForResponse) return;
+            
+            // Add user message to chat
+            addMessage('user', message);
+            
+            // Show typing indicator
+            typingIndicator.style.display = 'block';
+            isWaitingForResponse = true;
+            
+            // Send to websocket with session ID
+            socket.send(JSON.stringify({
+                message: message,
+                session_id: sessionId
+            }));
+            
+            // Clear input
+            userInput.value = '';
+        }
+        
+        // Add message to chat
+        function addMessage(role, content) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-bubble ${role === 'user' ? 'user-bubble' : 'assistant-bubble'}`;
+            
+            // Process markdown-like formatting in content
+            let formattedContent = content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')  // Bold
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')              // Italic
+                .replace(/- (.*?)\n/g, '<li>$1</li>')             // List items
+                .replace(/\n/g, '<br>');                          // Line breaks
+            
+            messageDiv.innerHTML = formattedContent;
+            chatMessages.appendChild(messageDiv);
+            
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Add to local history (not the session history which is managed by the server)
+            chatHistory.push({role, content});
+        }
+        
+        // Load chat history from server response
+        function loadChatHistory(messages) {
+            // Clear existing messages
+            chatMessages.innerHTML = '';
+            chatHistory = [];
+            
+            // Add each message to the UI
+            messages.forEach(msg => {
+                addMessage(msg.role, msg.content);
+            });
+            
+            console.log(`Loaded ${messages.length} messages from history`);
+        }
+        
+        // Event listeners
+        socket.onopen = () => {
+            console.log('WebSocket connected');
+            if (sessionId) {
+                sessionIdDisplay.textContent = sessionId.substring(0, 8) + '...';
+            }
+        };
+        
+        socket.onmessage = (event) => {
+            // Hide typing indicator
+            typingIndicator.style.display = 'none';
+            isWaitingForResponse = false;
+            
+            const data = JSON.parse(event.data);
+            
+            // Handle different message types
+            if (data.type === 'session_init') {
+                // Save the session ID
+                sessionId = data.session_id;
+                localStorage.setItem('knowledgeAgentSessionId', sessionId);
+                console.log(`Session initialized: ${sessionId}`);
+                sessionIdDisplay.textContent = sessionId.substring(0, 8) + '...';
+                
+                // Add welcome message if this is a new session
+                if (!data.message) {
+                    addMessage('assistant', 'Hello! How can I help you today?');
+                }
+            }
+            else if (data.type === 'history') {
+                // Load chat history from server
+                loadChatHistory(data.messages);
+            }
+            else if (data.type === 'error') {
+                // Display error message
+                addMessage('assistant', data.message);
+            }
+            else if (data.message) {
+                // Regular message
+                addMessage('assistant', data.message);
+            }
+        };
+        
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            typingIndicator.style.display = 'none';
+            isWaitingForResponse = false;
+            addMessage('assistant', 'Sorry, there was an error connecting to the server. Please try again later.');
+        };
+        
+        // Handle reconnection
+        socket.onclose = () => {
+            console.log('WebSocket closed. Will attempt to reconnect in 3 seconds...');
+            typingIndicator.style.display = 'none';
+            isWaitingForResponse = false;
+            
+            setTimeout(() => {
+                // Attempt reconnection with session ID
+                window.location.reload();
+            }, 3000);
+        };
+        
+        // Clear session button
+        function clearSession() {
+            localStorage.removeItem('knowledgeAgentSessionId');
+            window.location.reload();
+        }
+        
+        sendButton.addEventListener('click', sendMessage);
+        userInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+        
+        // Add clear session button
+        const clearSessionBtn = document.createElement('button');
+        clearSessionBtn.textContent = 'New Chat';
+        clearSessionBtn.className = 'ml-2 bg-gray-300 hover:bg-gray-400 text-gray-800 px-3 py-1 rounded text-sm';
+        clearSessionBtn.addEventListener('click', clearSession);
+        document.querySelector('.mt-4').appendChild(clearSessionBtn);
+    </script>
+</body>
+</html>

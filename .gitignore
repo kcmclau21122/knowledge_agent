@@ -1,0 +1,5 @@
+# Ignore cache, logs, models, and data
+__pycache__/
+logs/
+models/
+data/

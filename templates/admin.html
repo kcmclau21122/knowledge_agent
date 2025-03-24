@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ request.app.title }} - Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100">
+    <header class="bg-blue-600 text-white p-4">
+        <h1 class="text-2xl font-bold">Knowledge Agent - Admin Panel</h1>
+    </header>
+    
+    <main class="container mx-auto p-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Document Upload -->
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <h2 class="text-xl font-bold mb-4">Upload Documents</h2>
+                <form id="upload-form" class="space-y-4">
+                    <div>
+                        <label class="block mb-2">Select Document</label>
+                        <input type="file" id="document-file" class="w-full p-2 border rounded">
+                    </div>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded">Upload</button>
+                </form>
+                <div id="upload-status" class="mt-4"></div>
+            </div>
+            
+            <!-- Knowledge Base Management -->
+            <div class="bg-white rounded-lg shadow-md p-4">
+                <h2 class="text-xl font-bold mb-4">Knowledge Base Management</h2>
+                <button id="ingest-btn" class="bg-green-600 text-white px-4 py-2 rounded w-full mb-4">
+                    Ingest Knowledge Base
+                </button>
+                <div id="ingest-status" class="mt-4"></div>
+            </div>
+        </div>
+
+        <!-- Session Management -->
+        <div class="mt-4 bg-white rounded-lg shadow-md p-4">
+            <h2 class="text-xl font-bold mb-4">Session Management</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <button id="list-sessions-btn" class="bg-blue-500 text-white px-4 py-2 rounded w-full mb-2">
+                        List Active Sessions
+                    </button>
+                    <button id="cleanup-sessions-btn" class="bg-yellow-500 text-white px-4 py-2 rounded w-full">
+                        Clean Up Expired Sessions
+                    </button>
+                </div>
+                <div id="session-status" class="p-2 border rounded bg-gray-50 min-h-16"></div>
+            </div>
+        </div>
+    </main>
+    
+    <script>
+        // File upload
+        const uploadForm = document.getElementById('upload-form');
+        const uploadStatus = document.getElementById('upload-status');
+        
+        uploadForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('document-file');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                uploadStatus.innerHTML = '<p class="text-red-600">Please select a file</p>';
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            uploadStatus.innerHTML = '<p class="text-blue-600">Uploading...</p>';
+            
+            try {
+                const response = await fetch('/api/admin/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    uploadStatus.innerHTML = `<p class="text-green-600">${data.message}</p>`;
+                    fileInput.value = '';
+                } else {
+                    uploadStatus.innerHTML = `<p class="text-red-600">Error: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                uploadStatus.innerHTML = `<p class="text-red-600">Error: ${error.message}</p>`;
+            }
+        });
+        
+        // Ingest knowledge base
+        const ingestBtn = document.getElementById('ingest-btn');
+        const ingestStatus = document.getElementById('ingest-status');
+        
+        ingestBtn.addEventListener('click', async () => {
+            ingestStatus.innerHTML = '<p class="text-blue-600">Ingesting knowledge base...</p>';
+            
+            try {
+                const response = await fetch('/api/admin/ingest', {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    ingestStatus.innerHTML = `<p class="text-green-600">${data.message}</p>`;
+                } else {
+                    ingestStatus.innerHTML = `<p class="text-red-600">Error: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                ingestStatus.innerHTML = `<p class="text-red-600">Error: ${error.message}</p>`;
+            }
+        });
+
+        // Session Management
+        const listSessionsBtn = document.getElementById('list-sessions-btn');
+        const cleanupSessionsBtn = document.getElementById('cleanup-sessions-btn');
+        const sessionStatus = document.getElementById('session-status');
+        
+        listSessionsBtn.addEventListener('click', async () => {
+            sessionStatus.innerHTML = '<p class="text-blue-600">Fetching active sessions...</p>';
+            
+            try {
+                const response = await fetch('/api/admin/sessions');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    sessionStatus.innerHTML = `<p class="text-green-600">${data.message}</p>`;
+                } else {
+                    sessionStatus.innerHTML = `<p class="text-red-600">Error: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                sessionStatus.innerHTML = `<p class="text-red-600">Error: ${error.message}</p>`;
+            }
+        });
+        
+        cleanupSessionsBtn.addEventListener('click', async () => {
+            sessionStatus.innerHTML = '<p class="text-blue-600">Cleaning up expired sessions...</p>';
+            
+            try {
+                const response = await fetch('/api/admin/sessions/cleanup', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (response.ok) {
+                    sessionStatus.innerHTML = `<p class="text-green-600">${data.message}</p>`;
+                } else {
+                    sessionStatus.innerHTML = `<p class="text-red-600">Error: ${data.detail}</p>`;
+                }
+            } catch (error) {
+                sessionStatus.innerHTML = `<p class="text-red-600">Error: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

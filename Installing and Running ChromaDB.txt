@@ -1,0 +1,256 @@
+# Installing ChromaDB with Docker
+# Running ChromaDB with Docker for Windows
+
+Since you have Docker for Windows, you can easily run ChromaDB as a containerized service. Here's a step-by-step guide:
+
+## 1. Pull the ChromaDB Docker Image
+
+Open PowerShell or Command Prompt and run:
+
+```powershell
+docker pull chromadb/chroma
+```
+
+## 2. Create a Data Directory for Persistence
+
+Create a folder on your Windows system to store the ChromaDB data:
+
+```powershell
+mkdir C:\chroma_data
+```
+
+## 3. Run the ChromaDB Container
+
+```powershell
+docker run -d --name chroma_db ^
+  -p 8000:8000 ^
+  -v C:\chroma_data:/chroma/chroma ^
+  chromadb/chroma
+```
+
+This command:
+- Runs ChromaDB in detached mode (`-d`)
+- Names the container `chroma_db`
+- Maps port 8000 on your host to port 8000 in the container
+- Mounts the local directory for data persistence
+- Uses the `chromadb/chroma` image
+
+## 4. Verify the Container is Running
+
+```powershell
+docker ps
+```
+
+You should see your `chroma_db` container in the list with status "Up".
+
+## 5. Modifying the Knowledge Agent to Use Docker ChromaDB
+
+Edit the `vector_database.py` file to use HTTP client instead of the embedded client:
+
+```python
+def __init__(self, db_path=None, embedding_model=None, collection_name="knowledge_base", use_docker=True):
+    """Initialize the vector database with configuration parameters"""
+    self.db_path = db_path or Config.DB_DIR
+    self.embedding_model = embedding_model or Config.EMBEDDING_MODEL
+    self.collection_name = collection_name
+    
+    # Initialize embedding function
+    self.embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name=self.embedding_model
+    )
+    
+    # Initialize database
+    if use_docker:
+        # Connect to Docker ChromaDB
+        self.db = chromadb.HttpClient(host="localhost", port=8000)
+    else:
+        # Use embedded ChromaDB
+        self.db = chromadb.PersistentClient(
+            path=str(self.db_path),
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True,
+                chroma_db_impl="duckdb+parquet"  # Faster implementation
+    )
+)
+        
+    self.collection = self._get_or_create_collection()
+```
+
+Then add the `use_docker` parameter to the main script:
+
+```python
+# In main.py, add this parameter
+parser.add_argument("--use-docker-chromadb", action="store_true", help="Use ChromaDB running in Docker")
+
+# Then when initializing the vector database
+agent = KnowledgeAgent(company_name=args.company, use_docker_chromadb=args.use_docker_chromadb)
+```
+
+## 6. Starting the Knowledge Agent with Docker ChromaDB
+
+```powershell
+python main.py --use-docker-chromadb --company "Your Company Name"
+```
+
+## Useful Docker Commands for ChromaDB Management
+
+### View Container Logs
+
+```powershell
+docker logs chroma_db
+```
+
+### Stop the Container
+
+```powershell
+docker stop chroma_db
+```
+
+### Restart the Container
+
+```powershell
+docker start chroma_db
+```
+
+### Remove the Container
+
+```powershell
+docker stop chroma_db
+docker rm chroma_db
+```
+
+## Troubleshooting Docker for Windows Issues
+
+1. **WSL2 Backend**: Ensure you're using the WSL2 backend for Docker for Windows for better performance.
+
+2. **Path Format**: Windows paths in volume mounts may cause issues. Try using forward slashes:
+   ```powershell
+   -v C:/chroma_data:/chroma/chroma
+   ```
+
+3. **Permission Issues**: If you encounter permission problems, try running PowerShell as Administrator.
+
+4. **Network Access**: Ensure your Windows Firewall allows access to port 8000 if you're connecting from other machines.
+
+5. **Memory Allocation**: In Docker Desktop settings, you may need to increase the memory allocation if you're working with large document collections.
+
+Would you like me to provide more detailed instructions for integrating the Knowledge Agent with your Docker-based ChromaDB installation?
+------------------------------------------------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------------------------------------------
+# Installing and Running ChromaDB
+
+ChromaDB is the vector database used in our Knowledge Agent project for storing and searching document embeddings. Here's how to install and use it:
+
+## Basic Installation
+
+```bash
+pip install chromadb
+```
+
+This installs the Python client which can be used in both embedded mode (what our code uses) or client-server mode.
+
+## Using ChromaDB in Embedded Mode
+
+This is the simplest approach and what our Knowledge Agent uses by default:
+
+```python
+import chromadb
+
+# Create a persistent client that saves to disk
+client = chromadb.PersistentClient(path="./chroma_db")
+
+# Create a collection with an embedding function
+from chromadb.utils import embedding_functions
+embedding_function = embedding_functions.SentenceTransformerEmbeddingFunction(
+    model_name="sentence-transformers/all-MiniLM-L6-v2"
+)
+
+collection = client.create_collection(
+    name="my_collection",
+    embedding_function=embedding_function
+)
+
+# Add documents
+collection.add(
+    documents=["Document 1 content", "Document 2 content"],
+    ids=["doc1", "doc2"]
+)
+
+# Query the collection
+results = collection.query(
+    query_texts=["my query"],
+    n_results=2
+)
+```
+
+## Running ChromaDB as a Server
+
+For production use, you might want to run ChromaDB as a separate server:
+
+1. Install with server dependencies:
+   ```bash
+   pip install "chromadb[server]"
+   ```
+
+2. Start the server:
+   ```bash
+   chroma run --host 0.0.0.0 --port 8000 --path ./chroma_data
+   ```
+
+3. Connect to the server from your application:
+   ```python
+   import chromadb
+   client = chromadb.HttpClient(host="localhost", port=8000)
+   ```
+
+## Docker Installation
+
+For more robust deployments, you can use Docker:
+
+```bash
+docker pull chromadb/chroma
+docker run -p 8000:8000 chromadb/chroma
+```
+
+## Using ChromaDB in our Knowledge Agent
+
+In our refactored code, ChromaDB is handled in the `vector_database.py` module:
+
+1. The `VectorDatabase` class initializes ChromaDB in persistent mode:
+   ```python
+        self.db = chromadb.PersistentClient(
+            path=str(self.db_path),
+            settings=Settings(
+                anonymized_telemetry=False,
+                allow_reset=True,
+                chroma_db_impl="duckdb+parquet"  # Faster implementation
+    )
+)
+   ```
+
+2. To run the Knowledge Agent with ChromaDB:
+   ```bash
+   # First install all requirements
+   pip install -r requirements.txt
+   
+   # Initialize and run the knowledge agent
+   python main.py
+   ```
+
+## Common Issues and Solutions
+
+1. **Missing Dependencies**: If you get errors about missing packages, ensure you've installed the right dependencies:
+   ```bash
+   pip install chromadb sentence-transformers
+   ```
+
+2. **CUDA Issues**: For better performance with large models, install PyTorch with CUDA support:
+   ```bash
+   pip install torch --extra-index-url https://download.pytorch.org/whl/cu116
+   ```
+
+3. **Memory Errors**: ChromaDB can be memory-intensive with large collections. Increase your system's RAM or batch your operations.
+
+Would you like me to elaborate on any specific aspect of using ChromaDB in the knowledge agent application?
